@@ -1,13 +1,18 @@
 ---
 name: autonomous-gpu-kernel-timeline
-description: Let AKA autonomously add, run, inspect, and revise intra-kernel timeline probes for standalone CUDA/inline PTX or CuTe DSL when ordinary benchmark, NSYS, or NCU evidence cannot answer a specific kernel-internal timing question.
+description: Record and decode per-owner in-kernel timestamps for standalone CUDA/inline PTX or CuTe DSL, with receipted source/workload identity and ABBA overhead accounting. Use it for any kernel-internal ordering, overlap, or stall-location question, and always instead of hand-written %globaltimer or clock64 probes. Not available for Triton, Gluon, or FlyDSL.
 ---
 
 # Autonomous GPU Kernel Timeline
 
+## Decide whether you need this
+
 Use this inside an AKA optimization episode only after a correct runnable kernel and representative
-workload exist. Do not trigger it when aggregate kernel timing or ordinary profiler evidence already
-answers the question.
+workload exist. It is the only route to per-owner in-kernel timestamps: which writer reached a phase
+first, whether two phases actually overlapped, where inside one kernel the stall sits, and how much a
+source-level boundary costs. Aggregate kernel timing, NSYS, and NCU counters cannot answer those.
+Skip it when the open question is a whole-kernel cost, a counter-level bottleneck class, or a
+source-line symptom that a `--source` NCU run already pins down.
 
 ## Ownership
 
@@ -22,6 +27,8 @@ answers the question.
   and use `backends/cuda_backend/atrex_timeline.cuh`.
 - CuTe DSL: read [references/iket-quickstart.md](references/iket-quickstart.md) and use IKeT. Do not
   fall back to the CUDA backend.
+- Triton, Gluon, and FlyDSL: not supported. No backend can instrument them; do not adapt the CUDA
+  header or the IKeT route to them.
 
 ## Autonomous loop
 

@@ -58,6 +58,15 @@ dead ends and open directions from those records, including each record's compac
 
 ### 2. Profile and localize
 
+In-kernel timing evidence is framework-gated, and this gate is checked before any timestamp code is
+written. For `cuda` (standalone CUDA / inline PTX / NVRTC) and `cutedsl`, every in-kernel timestamp
+must come from `skills/autonomous-gpu-kernel-timeline/SKILL.md`: read that file before writing
+timestamp code, and never hand-roll `%globaltimer`, `clock64()`, printf timestamps, or scratch-buffer
+cycle counters. For `triton`, `gluon`, and `flydsl` there is no timeline backend: answer in-kernel
+timing questions with a `--source` NCU run and its `LOCALIZE` files plus PTX/SASS/TTGIR inspection. If
+you hand-instrument there anyway, the result is exploration-grade only and cannot support a plan
+claim, a journal number, or a handoff.
+
 Reuse a profile only when it matches the current committed kernel. Otherwise profile through the
 sandbox using the vendor-appropriate tooling. Both wrappers run `python <file>`, so the profiled file
 is the immutable `profile_driver.py` seeded next to `kernel.py` — never `kernel.py` itself, which the
@@ -98,11 +107,10 @@ Extract a concrete bottleneck and source-level target. Use PTX/SASS/TTGIR inspec
 lowering or instruction selection is part of the hypothesis. Do not make speculative optimization
 changes before obtaining usable evidence.
 
-When ordinary profiling has isolated one kernel but cannot distinguish a specific in-kernel timing
-hypothesis, read `skills/autonomous-gpu-kernel-timeline/SKILL.md` and run its autonomous loop. Use
-standalone CUDA/inline PTX through its CUDA backend and CuTe DSL through IKeT. Keep every attempt
-under `<PROFILE_DIR>/timeline/attempt-N`; when the remote command reads backend files, pass that
-specific skill path with sandbox `--input` and sync only the attempt output directory.
+On the timeline route, use standalone CUDA/inline PTX through its CUDA backend and CuTe DSL through
+IKeT. Keep every attempt under `<PROFILE_DIR>/timeline/attempt-N`; when the remote command reads
+backend files, pass that specific skill path with sandbox `--input` and sync only the attempt output
+directory.
 
 Timeline instrumentation is a temporary working snapshot on this episode's single HEAD line, not a
 candidate. Preserve the clean source and each useful instrumented source or reversible patch before
