@@ -1042,7 +1042,9 @@ def _run_application(argv: Optional[list[str]] = None) -> int:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    return _run_application(argv)
+    from orchestrator._bootstrap import run
+
+    return run(argv)
 
 
 if __name__ == "__main__":

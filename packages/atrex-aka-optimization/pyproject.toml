@@ -9,6 +9,9 @@ description = "AKA plugin framework: optimization"
 requires-python = ">=3.10"
 dependencies = ["atrex-aka-core==0.1.0", "atrex-aka-contracts==0.1.0"]
 
+[project.entry-points."aka.commands"]
+optimize = "aka.bootstrap.cli:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 include-package-data = true

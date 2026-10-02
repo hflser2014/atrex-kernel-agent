@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNERS = {
-    'atrex-aka-core': ('aka/__init__.py', 'aka/core'),
+    'atrex-aka-core': ('aka/__init__.py', 'aka/__main__.py', 'aka/cli.py', 'aka/core'),
     'atrex-aka-contracts': ('aka/contracts',),
     'atrex-aka-optimization': ('aka/bootstrap',),
 }

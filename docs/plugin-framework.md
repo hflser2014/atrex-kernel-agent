@@ -1,7 +1,7 @@
 # Plugin framework interface
 
-Core loads the selected application for programmatic Bootstrap invocation.
-The existing optimization entrypoint still directly calls its application body. This guide describes the framework shipped in this
+Core loads the selected application for both the existing optimization entrypoint
+and the installed command. This guide describes the framework shipped in this
 source tree. See [application invocation](application-plugin-migration.md) for setup
 and the supported checkout dependency.
 
