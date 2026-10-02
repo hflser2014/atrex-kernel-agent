@@ -1,0 +1,6 @@
+{
+  "api_version": 1,
+  "entries": [
+    {"id": "application", "name": "aka.bootstrap.application_plugin", "required": true}
+  ]
+}

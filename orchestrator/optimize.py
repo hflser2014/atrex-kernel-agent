@@ -1017,7 +1017,7 @@ def _run_main(argv: Optional[list[str]] = None) -> int:
             signal.signal(handled_signal, previous_handler)
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def _run_application(argv: Optional[list[str]] = None) -> int:
     try:
         result = _run_main(argv)
     except EnvironmentUnavailable:
@@ -1039,6 +1039,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             )
         return ENVIRONMENT_TEMPFAIL
     return result
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    return _run_application(argv)
 
 
 if __name__ == "__main__":

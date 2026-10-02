@@ -1,38 +1,36 @@
 # Plugin framework interface
 
-Core provides a synchronous plugin runtime independent of the optimization
-application. This guide describes the framework shipped in this source tree.
-The existing optimization entrypoint does not use Core in this version.
-
-## Installation
-
-Core supports Python 3.9 or later and has no runtime dependencies. Build and
-install it from this checkout using an environment with the `build` frontend:
-
-```sh
-python -m pip install build
-python tools/build_distributions.py --output /tmp/aka-core-dist
-python -m pip install /tmp/aka-core-dist/*.whl
-```
+Core loads the selected application for programmatic Bootstrap invocation.
+The existing optimization entrypoint still directly calls its application body. This guide describes the framework shipped in this
+source tree. See [application invocation](application-plugin-migration.md) for setup
+and the supported checkout dependency.
 
 ## Responsibilities
 
-`aka.core` owns declarations, JSON composition, dependencies, service Realms,
-contribution Scopes, effects, events and optional identity locks. It imports
-neither the optimization application nor Execution. The existing `plugin_runtime/`
-tool/skill registry is unrelated and remains untouched.
+- `aka.core`: declarations, JSON composition, dependencies, service Realms,
+  contribution Scopes, effects, events and optional identity locks.
+- `aka.contracts.application`: `ApplicationRequest` and synchronous
+  `Application.run(request) -> int`; no dependency on Core or a backend.
+- `aka.bootstrap`: application variables, profiles, token metadata, selection and
+  ownership of the application composition. The default adapter wraps the entire
+  existing optimization application. It is not a new Workflow implementation.
+
+Core imports neither the optimization application nor Execution. The existing
+`plugin_runtime/` tool/skill registry is unrelated and remains untouched.
 
 ## Plugin declaration and lifetime
 
 A plugin module declares a stable `name` matching its module name (underscores
 become hyphens), a plain synchronous `apply(ctx, config)`, and optional `provide`,
 `inject`, `optional_inject`, `Config`, `Defaults` and `interpolate` exports.
-`apply` constructs and registers objects; application execution belongs to its caller.
+`apply` constructs and registers objects; importing or booting the default
+application plugin does not start optimization.
 
 `ctx.provide(name, value)` registers a module implementation. Consumers declare
 injections and obtain the selected object via `ctx.get(name)`. Service tokens
-validate declared metadata, not the complete implementation protocol. Callers
-remain responsible for validating the behavior of provided implementations.
+validate declared metadata, not the complete implementation protocol. Application
+Bootstrap additionally checks that `run` is callable, synchronous, and returns an
+integer exit code; behavior still requires tests.
 
 Required injections gate activation. Dependencies track **registration serials**,
 not just provider identity; optional provider appearance and withdrawal also
@@ -63,8 +61,8 @@ injection, not row order, determines activation order.
 configuration before applying plugins and rejects duplicate single providers.
 A required row must be active even if it was disabled. An explicitly requested
 missing row fails; a required service must exist in the root Realm. Removing a row
-removes its own declaration. Callers can independently require services. There
-is no fallback to the default when selection fails.
+removes its own declaration, so Bootstrap independently requires the application
+service. There is no fallback to the default when selection fails.
 Still-mounted children declared with `ctx.plugin(..., required=True)` must also
 be active when boot finishes; a pending or failed required child fails boot and
 disposes the composition. Explicitly disposed children are no longer requirements.
@@ -74,12 +72,13 @@ allowlist or hidden defaults. `${aka:name}` references that map; `${env:NAME}` r
 the process environment (an unset environment name yields an empty string).
 References are permitted only in plugin-declared dotted field paths. Unknown
 variables, unsupported reference syntax and references outside those paths fail.
-No expression evaluation or recursive interpolation occurs. Callers own their
-variable names and defaults.
+No expression evaluation or recursive interpolation occurs. Bootstrap owns the
+optimization variable names and explicit blanks; it never reparses optimization
+argv or overrides the existing application's defaults.
 
 Identity locks are opt-in through `boot(..., workspace=..., lock_mode=...)`.
-Callers choose whether to enable a lock; Core does not define application recovery
-policy or a persisted campaign format.
+Application Bootstrap does not enable them, change recovery policy or create a
+new persisted campaign format.
 
 ## Isolation and events
 
@@ -111,3 +110,6 @@ AKA Core is inspired by Cordis plus loader mechanics, not by DSH's product
 DSH's asynchronous lifecycle, contextual event routing and event stop rules differ.
 No DSH dependency is installed. Async lifecycle, contextual event isolation,
 automatic discovery and application hot reload are not PR1 promises.
+
+See [the application adapter guide](application-plugin-migration.md) for invocation,
+package ownership and the legacy adapter's composition and recovery limits.
