@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atrex-aka-core"
+version = "0.1.0"
+description = "AKA plugin framework: core"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["aka", "aka.core", "aka.core.*"]
+
+[tool.setuptools.package-data]
+"aka.core" = ["profiles/*.json"]
