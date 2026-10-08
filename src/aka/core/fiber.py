@@ -32,6 +32,7 @@ from .errors import (
     CoreError,
     DisposalErrors,
     SettleDivergence,
+    UnknownService,
 )
 from .events import EventBus
 from .internal import (
@@ -398,6 +399,17 @@ class Root:
     def key(self, name: str) -> ServiceKey | None:
         return self.seams.get(name)
 
+    def _isolation_names(self, names: Sequence[str]) -> frozenset[str]:
+        if isinstance(names, (str, bytes)) or not isinstance(names, Sequence):
+            raise TypeError("isolation names must be a sequence of strings")
+        if any(not isinstance(name, str) or not name for name in names):
+            raise ValueError("isolation names must be non-empty strings")
+        isolated = frozenset(names)
+        unknown = sorted(isolated - set(self.seams))
+        if unknown:
+            raise UnknownService(", ".join(unknown))
+        return isolated
+
     # -- mounting --------------------------------------------------------
 
     def mount(
@@ -412,12 +424,13 @@ class Root:
         scope: Scope | None = None,
         realm: Realm | None = None,
     ) -> Fiber:
+        isolated = self._isolation_names(isolate)
         entry_id = entry_id or declaration.name
         if entry_id in self.fibers:
             raise ConfigError(entry_id, "duplicate composition row id")
         base_realm = realm or (parent.realm if parent is not None else self.realm)
         realm = (
-            base_realm.isolate(entry_id, frozenset(isolate)) if isolate else base_realm
+            base_realm.isolate(entry_id, isolated) if isolated else base_realm
         )
         base_scope = scope or (parent.scope if parent is not None else self.scope)
         fiber = Fiber(

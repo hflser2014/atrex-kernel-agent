@@ -187,7 +187,8 @@ class Context:
 
     def isolate(self, names: Sequence[str]) -> "Context":
         """A context whose subtree owns ``names`` privately."""
-        realm = self._realm.isolate(f"{self.entry_id}:isolate", frozenset(names))
+        isolated = self._fiber.root._isolation_names(names)
+        realm = self._realm.isolate(f"{self.entry_id}:isolate", isolated)
         return Context(self._fiber, scope=self._scope, realm=realm)
 
     def scope(self, name: str) -> "Context":
