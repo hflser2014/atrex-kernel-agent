@@ -2,7 +2,7 @@
 
 A small container with no AKA domain knowledge: a context that is a repository of services, a
 fiber per plugin instance whose dependency epoch decides when it loads, reversible effects,
-typed events with five dispatch modes, and JSON composition. Every capability lives outside
+typed notification and waterfall events, and JSON composition. Every capability lives outside
 this package, as a plugin.
 """
 
@@ -47,7 +47,7 @@ from .internal import (
 from .invariants import InvariantFailure, InvariantInstaller, InvariantRegistry
 from .keys import Event, ServiceKey, TokenTable
 from .loader import BootReport, load
-from .registry import Impl, ProviderRegistry, Realm, Registration
+from .registry import Impl, Realm
 from .scope import Scope, ScopedEntry
 
 __all__ = [
@@ -84,9 +84,7 @@ __all__ = [
     "Listener",
     "MonotonicViolation",
     "PluginDeclaration",
-    "ProviderRegistry",
     "Realm",
-    "Registration",
     "ResolvedComposition",
     "Root",
     "Row",

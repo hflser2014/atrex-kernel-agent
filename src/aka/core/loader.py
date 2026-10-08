@@ -56,14 +56,12 @@ def load(
     seams: Mapping[str, ServiceKey] | None = None,
     required: Sequence[str] | None = None,
     settle_rounds: int = DEFAULT_SETTLE_ROUNDS,
-    workers: int = 4,
     stderr: Any = None,
 ) -> BootReport:
     root = Root(
         seams=seams,
         variables=composition.variables,
         settle_rounds=settle_rounds,
-        workers=workers,
         stderr=stderr,
     )
     required_ids = composition.required | frozenset(required or ())
@@ -157,20 +155,4 @@ def _mount(root: Root, row: Row, seams: Mapping[str, ServiceKey] | None) -> None
     )
 
 
-def describe(report: BootReport) -> str:
-    """A short human summary of a booted tree."""
-    lines = [
-        f"profile {report.composition.profile}: "
-        f"{len(report.active)} active, {len(report.failed)} failed, "
-        f"{len(report.pending)} waiting"
-    ]
-    for entry_id in report.active:
-        lines.append(f"  active   {entry_id}")
-    for entry_id, reason in report.failed:
-        lines.append(f"  failed   {entry_id}: {reason}")
-    for entry_id, missing in report.pending:
-        lines.append(f"  waiting  {entry_id}: {', '.join(missing)}")
-    return "\n".join(lines)
-
-
-__all__ = ["BootReport", "FiberState", "describe", "import_plugin", "load"]
+__all__ = ["BootReport", "FiberState", "import_plugin", "load"]

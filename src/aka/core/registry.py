@@ -1,4 +1,4 @@
-"""The service store, isolation realms, and the shared named-provider helper.
+"""The service store and isolation realms.
 
 A context is a repository of services. A seam claims a stable name such as ``sandbox`` or
 ``numerics``; consumers find it by name instead of importing a concrete implementation, so
@@ -8,7 +8,7 @@ one row swap changes the whole product.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from .effects import Disposer
 from .errors import DuplicateProvide
@@ -146,91 +146,8 @@ def _require_registry_shape(key: ServiceKey, value: Any, entry_id: str) -> None:
     if missing:
         raise TypeError(
             f'entry "{entry_id}" provides registry seam {key.name} with a value missing '
-            f"{', '.join(missing)}(); embed a ProviderRegistry or declare the seam single"
+            f"{', '.join(missing)}(); provide a registry implementation or declare the seam single"
         )
 
 
-@dataclass(frozen=True)
-class Registration:
-    """One named provider inside a :class:`ProviderRegistry`."""
-
-    name: str
-    value: Any
-    order: int
-    owner: str
-
-
-class ProviderRegistry:
-    """Ordered named providers with effect-scoped disposal.
-
-    Roughly ten seams need "many implementations coexist, keyed by name, consulted in a
-    declared order" -- measurement modes, gates, recovery mechanisms, plan reviewers,
-    frameworks. They embed this instead of each growing its own dict.
-    """
-
-    def __init__(self, seam: str):
-        self._seam = seam
-        self._entries: dict[str, Registration] = {}
-        self._listeners: list[Callable[[], None]] = []
-
-    def register(
-        self, name: str, value: Any, *, order: int = 500, owner: str = ""
-    ) -> Disposer:
-        existing = self._entries.get(name)
-        if existing is not None:
-            raise DuplicateProvide(f"{self._seam}.{name}", existing.owner, owner)
-        registration = Registration(name=name, value=value, order=order, owner=owner)
-        self._entries[name] = registration
-
-        def disposer() -> None:
-            if self._entries.get(name) is registration:
-                del self._entries[name]
-                self._changed()
-
-        self._changed()
-        return disposer
-
-    def on_change(self, listener: Callable[[], None]) -> Disposer:
-        self._listeners.append(listener)
-
-        def disposer() -> None:
-            if listener in self._listeners:
-                self._listeners.remove(listener)
-
-        return disposer
-
-    def _changed(self) -> None:
-        for listener in tuple(self._listeners):
-            listener()
-
-    # -- reads -----------------------------------------------------------
-
-    def ids(self) -> tuple[str, ...]:
-        return tuple(entry.name for entry in self.ordered())
-
-    def ordered(self) -> tuple[Registration, ...]:
-        return tuple(
-            sorted(self._entries.values(), key=lambda entry: (entry.order, entry.name))
-        )
-
-    def values(self) -> tuple[Any, ...]:
-        return tuple(entry.value for entry in self.ordered())
-
-    def get(self, name: str) -> Any | None:
-        entry = self._entries.get(name)
-        return None if entry is None else entry.value
-
-    def __getitem__(self, name: str) -> Any:
-        return self._entries[name].value
-
-    def __contains__(self, name: object) -> bool:
-        return name in self._entries
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self.ids())
-
-    def __len__(self) -> int:
-        return len(self._entries)
-
-
-__all__ = ["Impl", "ProviderRegistry", "Realm", "Registration"]
+__all__ = ["Impl", "Realm"]

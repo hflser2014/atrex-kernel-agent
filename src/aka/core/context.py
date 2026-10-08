@@ -138,15 +138,6 @@ class Context:
     def emit(self, event: Event, payload: Any) -> None:
         self.bus.emit(event, payload)
 
-    def parallel(self, event: Event, payload: Any) -> None:
-        self.bus.parallel(event, payload)
-
-    def serial(self, event: Event, payload: Any) -> Any | None:
-        return self.bus.serial(event, payload)
-
-    def bail(self, event: Event, payload: Any) -> Any | None:
-        return self.bus.bail(event, payload)
-
     def waterfall(
         self, event: Event, payload: Any, terminal: Callable[[Any], Any]
     ) -> Any:
@@ -207,19 +198,6 @@ class Context:
 
     def resolve(self, kind: str) -> tuple[ScopedEntry, ...]:
         return self._scope.resolve(kind)
-
-    def restrict(
-        self, kind: str, *, allow: Sequence[str] | None = None, deny: Sequence[str] = ()
-    ) -> Disposer:
-        """Narrow the entries this scope inherits. ``allow=()`` admits nothing."""
-        return self.effect(
-            self._scope.restrict(
-                kind,
-                allow=None if allow is None else tuple(allow),
-                deny=tuple(deny),
-            ),
-            label=f"restrict {kind}",
-        )
 
     # -- diagnostics -----------------------------------------------------
 

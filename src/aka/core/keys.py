@@ -18,11 +18,11 @@ NAME = re.compile(r"[a-z][a-z0-9_-]*")
 EVENT_NAME = re.compile(r"[a-z][a-z0-9-]*/[a-z][a-z0-9-]*")
 
 Cardinality = Literal["single", "registry"]
-Mode = Literal["emit", "parallel", "serial", "bail", "waterfall"]
+Mode = Literal["emit", "waterfall"]
 
-MODES: frozenset[str] = frozenset(("emit", "parallel", "serial", "bail", "waterfall"))
+MODES: frozenset[str] = frozenset(("emit", "waterfall"))
 #: Modes whose dispatch produces a value, and therefore must declare a result type.
-RETURNING_MODES: frozenset[str] = frozenset(("serial", "bail", "waterfall"))
+RETURNING_MODES: frozenset[str] = frozenset(("waterfall",))
 
 #: ``(outer, inner) -> detail`` for a monotonic waterfall; a detail string means the
 #: listener removed part of what it was handed.

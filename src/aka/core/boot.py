@@ -65,7 +65,6 @@ def boot(
     tokens: Iterable[ServiceKey] = (),
     required_rows: Sequence[str] = (),
     required_services: Sequence[str] = (),
-    workers: int = 4,
     stderr: Any = None,
     workspace: Path | None = None,
     lock_mode: str | None = None,
@@ -137,7 +136,6 @@ def boot(
         composition,
         seams=seams,
         required=tuple(required_ids),
-        workers=workers,
         stderr=stderr,
     )
     missing = tuple(

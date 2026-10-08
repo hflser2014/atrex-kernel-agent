@@ -365,7 +365,6 @@ class Root:
         seams: Mapping[str, ServiceKey] | None = None,
         variables: Mapping[str, str] | None = None,
         settle_rounds: int = DEFAULT_SETTLE_ROUNDS,
-        workers: int = 4,
         stderr: Any = None,
     ):
         self.seams: Mapping[str, ServiceKey] = dict(seams or {})
@@ -373,7 +372,7 @@ class Root:
         self.settle_rounds = settle_rounds
         self.realm = Realm("root")
         self.scope = Scope("global")
-        self.bus = EventBus(error_sink=self.report, workers=workers)
+        self.bus = EventBus(error_sink=self.report)
         self.fibers: dict[str, Fiber] = {}
         self.transitions: list[FiberTransition] = []
         self.errors: list[ErrorReport] = []

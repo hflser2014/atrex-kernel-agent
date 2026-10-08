@@ -11,7 +11,6 @@ it to escape ``except Exception``, and the bus must not undo that.
 from __future__ import annotations
 
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -41,14 +40,12 @@ class Listener:
 
 
 class EventBus:
-    """Listener registry plus the five dispatch modes."""
+    """Listener registry with notification and waterfall dispatch."""
 
-    def __init__(self, *, error_sink: ErrorSink | None = None, workers: int = 4):
+    def __init__(self, *, error_sink: ErrorSink | None = None):
         self._listeners: dict[str, list[Listener]] = {}
         self._sequence = 0
         self._closed = False
-        self._workers = max(1, workers)
-        self._pool: ThreadPoolExecutor | None = None
         self._error_sink = error_sink
         # Bounded: a campaign dispatches for hours, and this is a diagnostic tail, not a ledger.
         self._short_circuits: deque[tuple[str, str]] = deque(maxlen=SHORT_CIRCUIT_HISTORY)
@@ -124,37 +121,6 @@ class EventBus:
             except Exception as exc:  # noqa: BLE001 - one bad observer must not starve the rest
                 self._report(event, listener, exc)
 
-    def parallel(self, event: Event, payload: Any) -> None:
-        self._require(event, "parallel")
-        if self._closed:
-            return
-        self._check_payload(event, payload)
-        listeners = self.listeners(event)
-        if not listeners:
-            return
-        pool = self._ensure_pool()
-        if pool is None:
-            return
-        try:
-            futures = [pool.submit(call_sync, listener.callback, payload) for listener in listeners]
-        except RuntimeError:
-            # close() shut the pool down between the guard and the submit: the tree is coming
-            # apart, so an observer notification is no longer owed.
-            return
-        for listener, future in zip(listeners, futures):
-            try:
-                future.result()
-            except Exception as exc:  # noqa: BLE001 - collect every failure, run every listener
-                self._report(event, listener, exc)
-
-    def serial(self, event: Event, payload: Any) -> Any | None:
-        self._require(event, "serial")
-        return self._first(event, payload, lambda value: value is not None)
-
-    def bail(self, event: Event, payload: Any) -> Any | None:
-        self._require(event, "bail")
-        return self._first(event, payload, bool)
-
     def waterfall(self, event: Event, payload: Any, terminal: Callable[[Any], Any]) -> Any:
         self._require(event, "waterfall")
         self._check_payload(event, payload)
@@ -217,29 +183,14 @@ class EventBus:
                         raise MonotonicViolation(
                             event.name, listener.describe(), detail
                         )
-                self._check_result(event, result, allow_none=False)
+                self._check_result(event, result)
                 return result
 
             return step
 
         result = build(0)(payload)
-        self._check_result(event, result, allow_none=False)
+        self._check_result(event, result)
         return result
-
-    def _first(
-        self, event: Event, payload: Any, accept: Callable[[Any], bool]
-    ) -> Any | None:
-        if self._closed:
-            return None
-        self._check_payload(event, payload)
-        for listener in self.listeners(event):
-            if not self._is_live(listener):
-                continue
-            result = call_sync(listener.callback, payload)
-            if accept(result):
-                self._check_result(event, result)
-                return result
-        return None
 
     # -- lifecycle -------------------------------------------------------
 
@@ -253,25 +204,12 @@ class EventBus:
         self._closed = True
         self._listeners.clear()
         self._short_circuits.clear()
-        pool, self._pool = self._pool, None
-        if pool is not None:
-            pool.shutdown(wait=True)
 
     @property
     def closed(self) -> bool:
         return self._closed
 
     # -- internals -------------------------------------------------------
-
-    def _ensure_pool(self) -> ThreadPoolExecutor | None:
-        if self._closed:
-            # Never create a pool for a closed bus: it would outlive close() unshut.
-            return None
-        if self._pool is None:
-            self._pool = ThreadPoolExecutor(
-                max_workers=self._workers, thread_name_prefix="aka-event"
-            )
-        return self._pool
 
     @staticmethod
     def _require(event: Event, mode: str) -> None:
@@ -291,13 +229,10 @@ class EventBus:
             )
 
     @staticmethod
-    def _check_result(event: Event, result: Any, *, allow_none: bool = True) -> None:
+    def _check_result(event: Event, result: Any) -> None:
         if event.result is None:
             return
         if result is None:
-            if allow_none:
-                # serial and bail treat a falsy return as an abstention.
-                return
             raise EventContractError(
                 event.name,
                 f"a waterfall listener returned None; it must return {event.result.__name__}, "
