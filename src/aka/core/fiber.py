@@ -151,7 +151,17 @@ class Fiber:
         return tuple(ids)
 
     def refresh(self) -> None:
-        if self.state in (FiberState.DISPOSED, FiberState.FAILED):
+        if self.state is FiberState.DISPOSED:
+            return
+        if self._restart_requested:
+            self._restart_requested = False
+            if self.state is FiberState.FAILED:
+                self.error = None
+                self._transition(FiberState.PENDING)
+            elif self.effects or self.children or self.state is FiberState.ACTIVE:
+                self._unload()
+            self.epoch = INACTIVE
+        if self.state is FiberState.FAILED:
             return
         epoch = self.compute_epoch()
         if epoch == self.epoch:
@@ -208,9 +218,6 @@ class Fiber:
             )
             return
         self._transition(FiberState.ACTIVE)
-        if self._restart_requested:
-            self._restart_requested = False
-            self.restart()
 
     def _unload(self) -> None:
         self._transition(FiberState.UNLOADING)
@@ -259,26 +266,18 @@ class Fiber:
             self.root.forget(self)
 
     def restart(self) -> None:
-        """Force one unload/load cycle, e.g. after a config patch.
+        """Request an unload/load cycle and settle before returning to an external caller.
 
-        Unloads whenever this load produced anything -- not only from ACTIVE -- so a restart
-        requested from inside the fiber's own ``apply`` cannot load a second time over the first
-        load's still-live effects. A FAILED row is cleared so the retry actually happens.
+        Requests made during a settle are deferred until the current transition finishes.
+        Missing dependencies leave the fiber pending; failed fibers may retry. Requests
+        during tree disposal or after this fiber is disposed have no effect.
         """
-        if self.state is FiberState.DISPOSED:
+        if self.state is FiberState.DISPOSED or self.root._disposing:
             return
-        if self.state is FiberState.LOADING:
-            # Requested from inside its own apply. Unloading now would tear down the load that is
-            # still running; honour it once the load settles instead.
-            self._restart_requested = True
-            return
-        if self.state is FiberState.FAILED:
-            self.error = None
-            self._transition(FiberState.PENDING)
-        elif self.effects or self.children or self.state is FiberState.ACTIVE:
-            self._unload()
-        self.epoch = INACTIVE
+        self._restart_requested = True
         self.root.enqueue(self)
+        if self.state not in (FiberState.LOADING, FiberState.UNLOADING):
+            self.root.settle()
 
     # -- config ----------------------------------------------------------
 
