@@ -49,6 +49,30 @@ def _files(package: str, names: Iterable[str]) -> dict[str, str]:
     return digests
 
 
+def _identity_names(module: str, *, exclude_metadata: bool = False) -> tuple[str, ...]:
+    try:
+        spec = importlib.util.find_spec(module)
+    except (ImportError, ValueError) as exc:
+        raise CompositionError(module, "identity implementation is unavailable") from exc
+    if spec is None:
+        raise CompositionError(module, "identity implementation is unavailable")
+    locations = tuple(spec.submodule_search_locations or ())
+    if not locations:
+        if not spec.origin or not Path(spec.origin).is_file():
+            raise CompositionError(module, "identity implementation has no source file")
+        return (Path(spec.origin).name,)
+    root = Path(locations[0])
+    return tuple(
+        path.relative_to(root).as_posix()
+        for path in sorted(root.rglob("*"))
+        if path.is_file() and "__pycache__" not in path.parts
+        and path.name != ".DS_Store" and path.suffix not in {".pyc", ".pyo"}
+        and (not exclude_metadata or not any(
+            part.endswith((".dist-info", ".egg-info")) for part in path.parts
+        ))
+    )
+
+
 def snapshot(
     composition: ResolvedComposition,
     declarations: Mapping[str, PluginDeclaration | None],
@@ -82,32 +106,11 @@ def snapshot(
         if declaration.identity_files:
             identity_root, names = package, declaration.identity_files
         else:
-            spec = importlib.util.find_spec(declaration.module)
-            if spec is None or spec.origin is None:
-                raise CompositionError(row.id, "plugin implementation is unavailable")
-            locations = tuple(spec.submodule_search_locations or ())
-            identity_root = (
-                declaration.module if locations else declaration.module.rsplit(".", 1)[0]
-            )
-            root = package_dir(identity_root)
-            names = tuple(
-                path.relative_to(root).as_posix()
-                for path in sorted(root.rglob("*"))
-                if path.is_file() and "__pycache__" not in path.parts
-                and path.name != ".DS_Store" and path.suffix not in {".pyc", ".pyo"}
-            )
+            identity_root = declaration.module
+            names = _identity_names(identity_root)
         identities = {identity_root: _files(identity_root, names)}
         for dependency in declaration.identity_packages:
-            root = package_dir(dependency)
-            if root is None:
-                raise CompositionError(row.id, f"identity package is unavailable: {dependency}")
-            names = (
-                path.relative_to(root).as_posix()
-                for path in sorted(root.rglob("*"))
-                if path.is_file() and "__pycache__" not in path.parts
-                and not any(part.endswith((".dist-info", ".egg-info")) for part in path.parts)
-                and path.name != ".DS_Store" and path.suffix not in {".pyc", ".pyo"}
-            )
+            names = _identity_names(dependency, exclude_metadata=True)
             identities[dependency] = _files(dependency, names)
         effective_config = (
             dict(effective_configs[row.id])
