@@ -52,7 +52,7 @@ class InvariantRegistry:
     def _resolve_enabled() -> bool:
         setting = os.environ.get(ENABLE_ENV)
         if setting is not None:
-            return setting.strip() not in ("", "0", "false", "no")
+            return setting.strip().lower() not in ("", "0", "false", "no", "off")
         # Checks are cheap but not free, and a campaign is long-running; default them on
         # where a violation should fail the build and off where it should not stop work.
         return "unittest" in sys.modules

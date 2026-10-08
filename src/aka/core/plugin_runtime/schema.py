@@ -59,7 +59,7 @@ def validate_schema(schema: dict, value: object, path: str = "input") -> None:
         for index, item in enumerate(value):
             validate_schema(schema["items"], item, f"{path}[{index}]")
     elif kind == "string":
-        if len(value.strip()) < schema.get("minLength", 0):
+        if len(value) < schema.get("minLength", 0):
             raise PluginError(
                 "schema_validation", f"{path}: string is empty or too short"
             )
