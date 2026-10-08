@@ -12,7 +12,7 @@ from .keys import ServiceKey
 from .loader import BootReport, import_plugin, load
 from .declaration import declare
 from .lock import reconcile, snapshot
-from .plugin_runtime.schema import PluginError, validate_schema
+from .plugin_runtime.schema import validate_schema
 
 PROFILES_DIR = Path(__file__).with_name("profiles")
 DEFAULT_PROFILE = "default"
