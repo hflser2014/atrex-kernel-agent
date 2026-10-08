@@ -34,7 +34,6 @@ ROW_FIELDS = frozenset(
         "name",
         "config",
         "group",
-        "entries",
         "disabled",
         "inject",
         "isolate",
@@ -207,7 +206,7 @@ def _flatten(source: str, entries: Any) -> list[Row]:
                 rows.append(
                     replace(
                         child,
-                        group=group_id,
+                        group=child.group or group_id,
                         isolate=tuple(dict.fromkeys(isolate + child.isolate)),
                         disabled=child.disabled or disabled,
                     )
@@ -227,8 +226,10 @@ def _apply_patch_document(
     patches = document.get("patches", [])
     if not isinstance(patches, list):
         raise CompositionError(source, "patches must be an array")
+    updated = list(rows)
     for patch in patches:
-        _apply_patch(source, rows, patch)
+        _apply_patch(source, updated, patch)
+    rows[:] = updated
 
 
 def _apply_patch(source: str, rows: list[Row], patch: Any) -> None:
@@ -240,8 +241,17 @@ def _apply_patch(source: str, rows: list[Row], patch: Any) -> None:
         raise CompositionError(source, f"patch needs a string id, got {entry_id!r}")
     index = next((i for i, row in enumerate(rows) if row.id == entry_id), None)
     insert = patch.get("insert")
-    if insert is not None and not isinstance(insert, dict):
+    if "insert" in patch and not isinstance(insert, dict):
         raise CompositionError(source, f'patch "{entry_id}" insert must be an object')
+    remove = _flag(source, patch.get("remove"), f'patch "{entry_id}" remove')
+    if "insert" in patch:
+        conflicts = sorted(set(patch) - {"id", "insert"})
+        if conflicts:
+            raise CompositionError(source, f'patch "{entry_id}" insert conflicts with {", ".join(conflicts)}')
+    if remove:
+        conflicts = sorted(set(patch) - {"id", "remove"})
+        if conflicts:
+            raise CompositionError(source, f'patch "{entry_id}" remove conflicts with {", ".join(conflicts)}')
     if isinstance(insert, dict) and "id" in insert:
         # Otherwise the inserted row's id could disagree with the patch target and slip past the
         # duplicate-id check the bundle layer performs.
@@ -249,7 +259,7 @@ def _apply_patch(source: str, rows: list[Row], patch: Any) -> None:
             source, f'patch "{entry_id}" insert must not carry its own id'
         )
     if index is None:
-        if _flag(source, patch.get("remove"), f'patch "{entry_id}" remove'):
+        if remove:
             # Removing what is already absent is the state the patch asked for.
             return
         if insert is None:
@@ -259,7 +269,7 @@ def _apply_patch(source: str, rows: list[Row], patch: Any) -> None:
             )
         rows.append(_row(source, {"id": entry_id, **insert}))
         return
-    if _flag(source, patch.get("remove"), f'patch "{entry_id}" remove'):
+    if remove:
         del rows[index]
         return
     row = rows[index]
