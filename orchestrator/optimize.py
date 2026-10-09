@@ -385,58 +385,9 @@ def dispatch_framework_campaigns(
 
 
 def _resolve_op(op_dir: str, optimization_mode: str = "leaderboard") -> dict:
-    """Derive everything op-specific from the atrex-bench native op dir, so the CLI needs only
-    --op-dir (+ the non-deducible --platform).
-    """
-    d = Path(op_dir).resolve()
-    if not d.is_dir():
-        raise SystemExit(f"--op-dir not found: {d}")
-    ref = d / "reference.py"
-    if not ref.is_file():
-        raise SystemExit(f"--op-dir has no reference.py: {d}")
-    atrex_bench_root = ""
-    provided_problem = has_agent_problem(d)
-    shapes_path = d / "shapes.json"
-    generalized = should_use_generalized_problem(d, optimization_mode)
-    if generalized and provided_problem:
-        if not shapes_path.is_file():
-            raise SystemExit(
-                "generalized Atrex-Bench operator requires private evaluator shapes.json: "
-                f"{d}"
-            )
-        try:
-            validate_agent_problem(
-                d / AGENT_PROBLEM_FILENAME,
-                private_shapes_path=shapes_path,
-            )
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-    if not is_sol_op(d) and shapes_path.is_file():
-        try:
-            validate_private_shapes(shapes_path)
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-        native_root = find_atrex_bench_root(d)
-        if native_root is None:
-            raise SystemExit(
-                "native Atrex-Bench operator requires its canonical scripts/run_eval.py and "
-                f"src/atrex_bench runtime in an ancestor directory: {d}"
-            )
-        atrex_bench_root = str(native_root)
-    return {
-        "name": d.name,
-        "reference": str(ref),
-        "op_dir": str(d),
-        "atrex_bench_root": atrex_bench_root,
-        "agent_problem": (
-            str(d / AGENT_PROBLEM_FILENAME) if generalized and provided_problem else ""
-        ),
-        "agent_problem_source": (
-            "provided"
-            if generalized and provided_problem
-            else ("auto" if generalized else "none")
-        ),
-    }
+    """Resolve existing operator options through the selected Problem module."""
+    from orchestrator._bootstrap import resolve_problem
+    return resolve_problem(op_dir, optimization_mode)
 
 
 def _run_main(argv: Optional[list[str]] = None) -> int:

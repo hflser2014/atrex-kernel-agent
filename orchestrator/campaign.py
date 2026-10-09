@@ -249,65 +249,23 @@ class Campaign:
 
     @property
     def private_reference_dir(self) -> Path | None:
-        """Return evaluator-only native inputs behind a generalized public problem."""
-        op_dir = Path(self.kernel_demo).resolve().parent
-        use_generalized = (
-            self.optimization_mode == "production"
-            and not is_sol_op(op_dir)
-            and (op_dir / "shapes.json").is_file()
-        )
-        if not self.atrex_bench_root or not use_generalized:
-            return None
-        shapes_path = op_dir / "shapes.json"
-        validate_private_shapes(shapes_path)
-        if has_agent_problem(op_dir):
-            validate_agent_problem(
-                op_dir / AGENT_PROBLEM_FILENAME,
-                private_shapes_path=shapes_path,
-            )
-        return op_dir
+        return self._problem_inputs().private_reference_dir
+
+    def _problem_inputs(self):
+        from ._bootstrap import task_modules
+        task_modules()
+        from aka.task.problem.inputs import BenchInputs
+        return BenchInputs(Path(self.kernel_demo).resolve().parent, self.workspace,
+                           self.optimization_mode, self.atrex_bench_root,
+                           self._generated_agent_problem_digest)
 
     def _ensure_agent_problem(self) -> None:
-        """Materialize the public contract before any production optimization session.
-
-        A user-authored contract is copied verbatim. When production receives only detailed
-        evaluator shapes, a dedicated clean AKA session derives the public contract in a temporary
-        directory; the later baseline/optimization sessions never receive ``shapes.json``.
-        """
-        private_dir = self.private_reference_dir
-        if private_dir is None:
+        """Schedule the original authoring session when public input preparation requires it."""
+        inputs = self._problem_inputs()
+        if inputs.prepare_public():
+            self._generated_agent_problem_digest = inputs.generated_digest
             return
         destination = self.workspace / AGENT_PROBLEM_FILENAME
-        shapes_path = private_dir / "shapes.json"
-        provided = private_dir / AGENT_PROBLEM_FILENAME
-        if provided.is_file():
-            validate_agent_problem(provided, private_shapes_path=shapes_path)
-            shutil.copy2(provided, destination)
-            print(
-                f"[orchestrator] generalized problem: using user-provided {provided}",
-                flush=True,
-            )
-            return
-        if destination.is_file():
-            validate_generated_agent_problem(
-                destination,
-                private_shapes_path=shapes_path,
-            )
-            self._generated_agent_problem_digest = hashlib.sha256(
-                destination.read_bytes()
-            ).hexdigest()
-            print(
-                "[orchestrator] generalized problem: reusing workspace-generated "
-                f"{destination}",
-                flush=True,
-            )
-            return
-        if self.optimization_mode != "production":
-            raise RuntimeError(
-                "a generalized non-production campaign requires a user-provided "
-                f"{AGENT_PROBLEM_FILENAME}"
-            )
-
         print(
             "[orchestrator] generalized problem: production received detailed shapes only; "
             "starting AKA problem-authoring session",
@@ -318,10 +276,7 @@ class Campaign:
             prefix="aka-generalize-problem-"
         ) as raw_staging:
             staging = Path(raw_staging)
-            for name in ("reference.py", "input.py", "shapes.json", "metadata.json"):
-                source = private_dir / name
-                if source.is_file():
-                    shutil.copy2(source, staging / name)
+            inputs.authoring_assets(staging)
             for attempt in range(2):
                 repair_context = (
                     "The current agent_problem.json failed orchestrator validation. Replace it "
@@ -343,10 +298,7 @@ class Campaign:
                 self._account(result, f"agent problem generation attempt {attempt + 1}")
                 generated = staging / AGENT_PROBLEM_FILENAME
                 try:
-                    validate_generated_agent_problem(
-                        generated,
-                        private_shapes_path=shapes_path,
-                    )
+                    inputs.validate_generated(generated)
                 except ValueError as exc:
                     validation_error = str(exc)
                     if attempt == 0:
@@ -357,10 +309,8 @@ class Campaign:
                         f"two attempts: {validation_error}"
                         + (f"; agent output: {detail}" if detail else "")
                     ) from exc
-                shutil.copy2(generated, destination)
-                self._generated_agent_problem_digest = hashlib.sha256(
-                    destination.read_bytes()
-                ).hexdigest()
+                inputs.accept_generated(generated)
+                self._generated_agent_problem_digest = inputs.generated_digest
                 print(
                     f"[orchestrator] generalized problem: generated {destination}",
                     flush=True,
@@ -505,56 +455,7 @@ class Campaign:
         return ""
 
     def _assert_generalized_inputs_are_private(self) -> None:
-        """Fail closed if exact evaluator artifacts appear in the agent workspace."""
-        private_dir = self.private_reference_dir
-        if private_dir is None:
-            return
-        public_problem = self.workspace / AGENT_PROBLEM_FILENAME
-        if not public_problem.is_file():
-            raise RuntimeError(
-                "generalized Atrex-Bench workspace is missing agent_problem.json; "
-                "start a fresh workspace"
-            )
-        try:
-            provided_problem = private_dir / AGENT_PROBLEM_FILENAME
-            if provided_problem.is_file():
-                validate_agent_problem(
-                    public_problem,
-                    private_shapes_path=private_dir / "shapes.json",
-                )
-                if public_problem.read_bytes() != provided_problem.read_bytes():
-                    raise ValueError(
-                        "workspace agent_problem.json differs from the user-provided contract"
-                    )
-            else:
-                validate_generated_agent_problem(
-                    public_problem,
-                    private_shapes_path=private_dir / "shapes.json",
-                )
-                if (
-                    self._generated_agent_problem_digest
-                    and hashlib.sha256(public_problem.read_bytes()).hexdigest()
-                    != self._generated_agent_problem_digest
-                ):
-                    raise ValueError(
-                        "workspace agent_problem.json was modified after automatic generation"
-                    )
-        except ValueError as exc:
-            raise RuntimeError(
-                f"generalized Atrex-Bench workspace has an invalid public problem: {exc}; "
-                "start a fresh workspace"
-            ) from exc
-        leaked = [
-            name
-            for name in ("shapes.json", "metadata.json", "roofline.json", "valid.py")
-            if (self.workspace / name).exists()
-        ]
-        if leaked:
-            raise RuntimeError(
-                "generalized Atrex-Bench workspace exposes evaluator-only files: "
-                + ", ".join(leaked)
-                + "; start a fresh workspace"
-            )
+        self._problem_inputs().assert_private()
 
     @property
     def workspace(self) -> Path:
@@ -913,11 +814,7 @@ class Campaign:
         # Production native tasks always expose a generalized public contract. Exact shapes and
         # release metadata remain in the source operator directory and are injected only at the
         # sandbox boundary. A missing public contract is authored before the baseline session.
-        generalized = self.private_reference_dir is not None
-        for name in agent_visible_operator_files(op_dir, generalized=generalized):
-            source = op_dir / name
-            if source.is_file():
-                shutil.copy2(source, self.workspace / name)
+        generalized = self._problem_inputs().materialize_operator_files()
         self._ensure_agent_problem()
         if generalized:
             # Seed the immutable public contract into the eventual V0 commit even when the

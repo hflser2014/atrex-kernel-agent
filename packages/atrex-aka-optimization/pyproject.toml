@@ -7,7 +7,7 @@ name = "atrex-aka-optimization"
 version = "0.1.0"
 description = "AKA legacy optimizer and default launch profiles"
 requires-python = ">=3.10"
-dependencies = ["atrex-aka-bootstrap==0.1.0"]
+dependencies = ["atrex-aka-bootstrap==0.1.0", "atrex-aka-bench==0.1.0"]
 
 [project.entry-points."aka.commands"]
 optimize = "aka.legacy.application.cli:main"
