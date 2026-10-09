@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -111,7 +112,6 @@ def _load_restart(state_dir: Path) -> dict[str, Any]:
                 or any(not isinstance(key, str) or (item is not None and not isinstance(item, str)) for key, item in launch.items())
                 or not launch["AKA_LAUNCH_SELECTION"] or not launch["AKA_LAUNCH_DIGEST"]):
             raise RuntimeError("restart metadata has invalid launch_environment")
-        import hashlib
         try:
             payload = Path(launch["AKA_LAUNCH_SELECTION"]).read_text()
         except OSError as exc:

@@ -19,7 +19,12 @@ class LegacyStartup:
         self._repo_root = repo_root
 
     def run(self, invocation):
-        from orchestrator.process_launch import optimizer_entrypoint
+        try:
+            from orchestrator.process_launch import optimizer_entrypoint
+        except ModuleNotFoundError as exc:
+            if exc.name not in {"orchestrator", "orchestrator.process_launch"}:
+                raise
+            raise RuntimeError("make the matching AKA checkout importable before invocation") from exc
         expected = invocation.bindings.get("optimizer_script")
         if expected is None or Path(expected).resolve() != optimizer_entrypoint():
             raise RuntimeError("startup selected a different optimizer entrypoint")

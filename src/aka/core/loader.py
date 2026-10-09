@@ -45,6 +45,8 @@ class BootReport:
 
         A host can serialize the composition for future processes without
         depending on Fiber representation or aliasing plugin-owned config data.
+        Dynamic Context.plugin() children are outside the recorded rows and
+        are rejected by hosts requiring a reconstructible frozen composition.
         """
         if not self.composition.configs_resolved:
             raise ValueError("composition verification requires frozen configs")

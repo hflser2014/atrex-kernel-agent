@@ -8,8 +8,7 @@ from typing import Sequence
 
 from aka.contracts.application import ApplicationRequest
 
-from .host import run_application
-from .host import PROFILES_DIR
+from .host import PROFILES_DIR, run_application
 
 
 def main(argv: Sequence[str] | None = None) -> int:

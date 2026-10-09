@@ -133,7 +133,7 @@ If AKA is useful in your work, please cite the [Atrex paper](https://arxiv.org/a
 ## Application framework
 
 The existing script keeps its arguments and default behavior. After installing
-the Core, Contracts and application adapter packages, the new command is:
+the Core, Contracts, Bootstrap and Optimization packages, the new command is:
 
 ```sh
 aka optimize --repo-root /path/to/aka -- \

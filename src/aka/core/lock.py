@@ -128,7 +128,7 @@ def resource_identity(root: Path, paths: Iterable[str], *, submodules: Mapping[s
                                  and base / name not in excluded)
                 files.extend(base / name for name in sorted(names))
         for item in files:
-            if any(item == path or path in item.parents for path in excluded):
+            if any(item == excluded_path or excluded_path in item.parents for excluded_path in excluded):
                 continue
             if (not item.is_file() or "__pycache__" in item.parts or ".git" in item.parts or item.name == ".DS_Store"
                     or item.suffix in {".pyc", ".pyo"}):

@@ -4,12 +4,13 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Sequence
 
 from aka.contracts.startup import Invocation
 from .host import run_profile
 
 
-def main(argv=None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     boundary = argv.index("--") if "--" in argv else len(argv)
     parser = argparse.ArgumentParser(prog="aka run")

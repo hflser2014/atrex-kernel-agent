@@ -32,7 +32,7 @@ def capture(selection: Selection) -> tuple[Selection, str]:
                   "identity": resource_identity(root, paths, submodules=selection.submodules.get(str(root), {}))}
                  for root, paths in selection.resources]
     host = {package: resource_identity(package_dir(package), (".",))
-            for package in ("aka.bootstrap", "aka.contracts")}
+            for package in ("aka.core", "aka.bootstrap", "aka.contracts")}
     value = {"version": 1, "target": selection.target,
              "required_services": list(selection.required_services),
              "bindings": dict(selection.bindings), "environment": dict(selection.environment),

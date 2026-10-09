@@ -34,10 +34,10 @@ def recovery_environment(directory: Path):
         if path.read_text() != payload:
             raise RuntimeError("refusing to replace recovery launch selection with a different composition")
     else:
-        from orchestrator.environment_recovery import durable_write_text
+        from orchestrator.durable_state import durable_write_text
         durable_write_text(path, payload)
-        path.chmod(0o600)
     return {**environment, SELECTION_ENV: str(path), DIGEST_ENV: digest(payload)}
+
 
 @contextmanager
 def invocation_environment(values):

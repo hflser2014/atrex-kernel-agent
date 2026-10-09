@@ -10,7 +10,6 @@ from aka.bootstrap.continuation import read, restore
 from aka.bootstrap.host import run_selection
 from aka.bootstrap.profile import resolve_profile
 from aka.contracts.startup import Invocation
-from aka.core.boot import compose
 from aka.core.errors import CompositionError
 from .processes import invocation_environment
 
@@ -30,13 +29,6 @@ def application_variables(repo_root, values=None):
     return {**{name: str(values.get(name, "")) for name in COMPOSITION_VARS}, "repo_root": str(root)}
 
 
-def compose_application(repo_root, *, profile="application", profiles_dir=PROFILES_DIR,
-                        patch_files=(), patches=(), variables=None):
-    return compose(profile, profiles_dir=Path(profiles_dir) / "compositions",
-                   patch_files=patch_files, patches=patches,
-                   variables=application_variables(repo_root, variables))
-
-
 def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR,
                     patch_files=(), patches=(), variables=None, tokens=()):
     optimizer = sys.modules.get("orchestrator.optimize")
@@ -50,7 +42,10 @@ def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR
         process_launch = sys.modules.get("orchestrator.process_launch")
         script = (process_launch.optimizer_entrypoint() if process_launch is not None
                   else request.repo_root / "orchestrator/optimize.py")
-        if Path(selection.bindings["optimizer_script"]).resolve() != Path(script).resolve():
+        expected_script = selection.bindings.get("optimizer_script")
+        if expected_script is None:
+            raise CompositionError("continuation", "legacy startup requires an optimizer_script binding")
+        if Path(expected_script).resolve() != Path(script).resolve():
             raise RuntimeError("reconstructed launch selected a different optimizer entrypoint")
         if selection.composition.variables.get("repo_root") != str(request.repo_root):
             raise RuntimeError("a different AKA checkout is requested by continuation")
