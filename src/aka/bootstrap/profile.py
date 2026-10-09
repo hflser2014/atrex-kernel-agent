@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -20,6 +21,9 @@ class Selection:
     tokens: tuple[ServiceKey, ...]
     required_services: tuple[str, ...]
     resources: tuple[tuple[Path, tuple[str, ...]], ...]
+    submodules: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
+    bindings: Mapping[str, str] = field(default_factory=dict)
+    environment: Mapping[str, str | None] = field(default_factory=dict)
 
 
 def registered_tokens(extra: Sequence[ServiceKey] = ()) -> dict[str, ServiceKey]:
@@ -49,7 +53,7 @@ def resolve_profile(profile: Path, *, patch_files: Sequence[Path] = (),
         value = json.loads(profile.read_text())
     except (OSError, ValueError) as exc:
         raise CompositionError(str(profile), f"cannot read launch profile: {exc}") from exc
-    fields = {"api_version", "composition", "target", "tokens", "required_services", "resources", "doc"}
+    fields = {"api_version", "composition", "target", "tokens", "required_services", "resources", "bindings", "environment", "doc"}
     if (not isinstance(value, dict) or type(value.get("api_version")) is not int
             or value["api_version"] != 1 or set(value) - fields):
         raise CompositionError(str(profile), "invalid launch profile fields or version")
@@ -83,8 +87,9 @@ def resolve_profile(profile: Path, *, patch_files: Sequence[Path] = (),
     if not isinstance(resources, list):
         raise CompositionError(str(profile), "resources must be an array")
     resolved = []
+    pinned = {}
     for resource in resources:
-        if (not isinstance(resource, dict) or set(resource) != {"root", "paths"}
+        if (not isinstance(resource, dict) or not {"root", "paths"} <= set(resource) or set(resource) - {"root", "paths", "submodules"}
                 or not isinstance(resource["root"], str)
                 or not isinstance(resource["paths"], list)
                 or not resource["paths"]
@@ -93,5 +98,19 @@ def resolve_profile(profile: Path, *, patch_files: Sequence[Path] = (),
         path = Path(substitute(resource["root"], composition.variables, str(profile))).expanduser()
         if not path.is_absolute():
             path = profile.parent / path
-        resolved.append((path.resolve(), tuple(resource["paths"])))
-    return Selection(composition, target, tuple(seams.values()), required, tuple(resolved))
+        path = path.resolve()
+        submodules = resource.get("submodules", {})
+        if not isinstance(submodules, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in submodules.items()):
+            raise CompositionError(str(profile), "submodules must map relative paths to pinned commits")
+        if submodules:
+            pinned[str(path)] = dict(submodules)
+        resolved.append((path, tuple(resource["paths"])))
+    bindings = value.get("bindings", {})
+    if not isinstance(bindings, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in bindings.items()):
+        raise CompositionError(str(profile), "bindings must map names to strings")
+    bindings = {key: substitute(text, composition.variables, str(profile)) for key, text in bindings.items()}
+    environment_names = names("environment")
+    if any("=" in name or "\0" in name or name.startswith("AKA_LAUNCH_") for name in environment_names):
+        raise CompositionError(str(profile), "invalid environment binding name")
+    environment = {key: os.environ.get(key) for key in environment_names}
+    return Selection(composition, target, tuple(seams.values()), required, tuple(resolved), pinned, bindings, environment)

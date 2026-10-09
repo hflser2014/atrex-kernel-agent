@@ -34,23 +34,17 @@ def run_selection(selection, invocation: Invocation) -> int:
         path = Path(tmp) / "selection.json"
         path.write_text(payload)
         path.chmod(0o600)
-        continuation = {SELECTION_ENV: str(path), DIGEST_ENV: digest(payload)}
+        continuation = {**selection.environment, SELECTION_ENV: str(path), DIGEST_ENV: digest(payload)}
         report = boot(selection.composition, tokens=selection.tokens,
                       required_services=selection.required_services)
         try:
-            # Runtime config transforms and dynamically mounted implementations
-            # must not silently escape the recorded effective selection.
-            recorded = {row.id: row for row in selection.composition.enabled}
-            for entry_id, fiber in report.root.fibers.items():
-                row = recorded.get(entry_id)
-                if row is None or (fiber.config is not None and dict(fiber.config) != dict(row.config)):
-                    raise RuntimeError("startup setup changed the recorded composition or effective config")
+            report.verify_composition()
             target = report.service(selection.target)
             entry = getattr(target, "run", None)
             if not callable(entry):
                 raise TypeError("selected startup target must implement run(invocation)")
             require_sync(entry, "startup.run")
-            result = call_sync(entry, Invocation(invocation.argv, continuation))
+            result = call_sync(entry, Invocation(invocation.argv, continuation, selection.bindings))
             if type(result) is not int:
                 raise TypeError("startup.run must return an integer exit code")
             return result

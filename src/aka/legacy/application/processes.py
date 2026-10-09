@@ -4,6 +4,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
+import os
 
 from aka.bootstrap.continuation import SELECTION_ENV, DIGEST_ENV, digest, read
 
@@ -36,4 +37,20 @@ def recovery_environment(directory: Path):
         from orchestrator.environment_recovery import durable_write_text
         durable_write_text(path, payload)
         path.chmod(0o600)
-    return {SELECTION_ENV: str(path), DIGEST_ENV: digest(payload)}
+    return {**environment, SELECTION_ENV: str(path), DIGEST_ENV: digest(payload)}
+
+@contextmanager
+def invocation_environment(values):
+    previous = {name: os.environ.get(name) for name in values}
+    def apply(environment):
+        for name, value in environment.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+    apply(values)
+    try:
+        yield
+    finally:
+        apply(previous)
+

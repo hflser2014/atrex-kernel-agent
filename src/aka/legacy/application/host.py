@@ -12,6 +12,7 @@ from aka.bootstrap.profile import resolve_profile
 from aka.contracts.startup import Invocation
 from aka.core.boot import compose
 from aka.core.errors import CompositionError
+from .processes import invocation_environment
 
 PROFILES_DIR = Path(__file__).with_name("profiles")
 COMPOSITION_VARS = ("repo_root", "workspace", "campaign_name", "operator", "platform", "arch",
@@ -49,8 +50,7 @@ def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR
         process_launch = sys.modules.get("orchestrator.process_launch")
         script = (process_launch.optimizer_entrypoint() if process_launch is not None
                   else request.repo_root / "orchestrator/optimize.py")
-        recorded_root, recorded_paths = selection.resources[-1]
-        if (recorded_root / recorded_paths[0]).resolve() != Path(script).resolve():
+        if Path(selection.bindings["optimizer_script"]).resolve() != Path(script).resolve():
             raise RuntimeError("reconstructed launch selected a different optimizer entrypoint")
         if selection.composition.variables.get("repo_root") != str(request.repo_root):
             raise RuntimeError("a different AKA checkout is requested by continuation")
@@ -68,10 +68,12 @@ def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR
         if script != request.repo_root / "orchestrator/optimize.py":
             # Hash static internal adapters and selected wiki; generated runtime
             # views and trace records are outputs, not implementation identity.
-            paths.extend(name for name in ("scripts", "gpu-wiki", "skills")
+            paths.extend(name for name in ("scripts", "gpu-wiki", "skills", "runtime_contract")
                          if (script.parent / name).exists())
         bindings = process_launch.optimizer_resources() if process_launch is not None else ()
         bound_resources = tuple((path.parent, (path.name,)) if path.is_file() else (path, (".",))
                                 for path in bindings)
-        selection = replace(selection, resources=(*selection.resources, *bound_resources, (script.parent, tuple(paths))))
-    return run_selection(selection, Invocation(request.argv))
+        selection = replace(selection, resources=(*selection.resources, *bound_resources, (script.parent, tuple(paths))),
+                            bindings={**selection.bindings, "optimizer_script": str(script)})
+    with invocation_environment(selection.environment):
+        return run_selection(selection, Invocation(request.argv))

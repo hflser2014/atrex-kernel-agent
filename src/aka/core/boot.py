@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from dataclasses import replace
+from copy import deepcopy
 
 from .composition import ResolvedComposition, apply_interpolation, resolve
 from .errors import BootFailure
@@ -163,7 +164,7 @@ def freeze(composition: ResolvedComposition, *, tokens: Iterable[ServiceKey] = (
     """
     seams, declarations, configs = _prepare(composition, tokens)
     effective = replace(composition, rows=tuple(
-        replace(row, config=dict(configs[row.id])) if row.id in configs else row
+        replace(row, config=deepcopy(dict(configs[row.id]))) if row.id in configs else row
         for row in composition.rows
     ), variables=dict(composition.variables), configs_resolved=True)
     identity = snapshot(effective, declarations, seams.values(), effective_configs=configs)

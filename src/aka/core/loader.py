@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
 from .composition import ResolvedComposition, Row
@@ -38,6 +39,20 @@ class BootReport:
         """
         impl = self.root.realm.resolve(name)
         return None if impl is None else impl.value
+
+    def verify_composition(self) -> None:
+        """Reject setup changes outside a frozen effective composition.
+
+        A host can serialize the composition for future processes without
+        depending on Fiber representation or aliasing plugin-owned config data.
+        """
+        if not self.composition.configs_resolved:
+            raise ValueError("composition verification requires frozen configs")
+        recorded = {row.id: row for row in self.composition.enabled}
+        for entry_id, fiber in self.root.fibers.items():
+            row = recorded.get(entry_id)
+            if row is None or (fiber.config is not None and dict(fiber.config) != dict(row.config)):
+                raise CompositionError(entry_id, "startup setup changed the recorded composition or effective config")
 
     def dispose(self) -> None:
         self.root.dispose()
@@ -148,7 +163,7 @@ def _mount(root: Root, row: Row, seams: Mapping[str, ServiceKey] | None, *, conf
     declaration = declare(module, known_seams=seams).with_extra_inject(row.inject)
     root.mount(
         declaration,
-        row.config,
+        deepcopy(dict(row.config)) if configs_resolved else row.config,
         entry_id=row.id,
         required=row.required,
         isolate=row.isolate,

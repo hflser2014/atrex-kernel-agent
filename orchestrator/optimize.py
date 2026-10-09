@@ -321,7 +321,11 @@ def dispatch_framework_campaigns(
                 cmd += ["--arch", arch]
             from aka.legacy.application.processes import child_environment as launch_environment
             child_environment = os.environ.copy()
-            child_environment.update(launch_environment())
+            for name, value in launch_environment().items():
+                if value is None:
+                    child_environment.pop(name, None)
+                else:
+                    child_environment[name] = value
             child_environment["ATREX_ENVIRONMENT_RECOVERY_OWNER"] = "0"
             proc = subprocess.Popen(
                 cmd,

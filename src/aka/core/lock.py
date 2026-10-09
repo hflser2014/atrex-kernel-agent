@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import tempfile
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -73,16 +74,62 @@ def _identity_names(module: str, *, exclude_metadata: bool = False) -> tuple[str
     )
 
 
-def resource_identity(root: Path, paths: Iterable[str]) -> dict[str, str]:
+def resource_identity(root: Path, paths: Iterable[str], *, submodules: Mapping[str, str] | None = None) -> dict[str, str]:
     """Hash explicitly selected resources, including tree membership, within a root."""
     root = Path(root).resolve()
     result = {}
+    excluded = set()
+    gitlinks = None
+    if submodules and (root / ".git").exists():
+        recorded = subprocess.run(["git", "-C", str(root), "ls-files", "--stage", "-z"],
+                                  capture_output=True, text=True)
+        if recorded.returncode:
+            raise CompositionError(str(root), "cannot read checkout gitlinks")
+        gitlinks = {}
+        for record in recorded.stdout.split("\0"):
+            if not record:
+                continue
+            metadata, name = record.split("\t", 1)
+            mode, commit, stage = metadata.split()
+            if mode == "160000" and stage == "0":
+                gitlinks[name] = commit
+    for name, commit in (submodules or {}).items():
+        path = (root / name).absolute()
+        if (not path.resolve().is_relative_to(root) or not isinstance(commit, str)
+                or len(commit) != 40 or any(x not in "0123456789abcdef" for x in commit)):
+            raise CompositionError(str(root), f"invalid pinned submodule: {name}")
+        if gitlinks is not None and gitlinks.get(name) != commit:
+            raise CompositionError(str(root), f"checkout gitlink differs from pinned implementation: {name}")
+        excluded.add(path)
+        # Uninitialized gitlinks and clean pinned checkouts describe the same
+        # implementation. Automatic initialization does not change selection.
+        if path.exists() and any(path.iterdir()):
+            if not (path / ".git").exists():
+                raise CompositionError(str(root), f"submodule has content without Git identity: {name}")
+            def git(*args):
+                result = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True)
+                if result.returncode:
+                    raise CompositionError(str(root), f"cannot validate submodule: {name}")
+                return result.stdout.strip()
+            if git("rev-parse", "HEAD") != commit or git("status", "--porcelain", "--untracked-files=all"):
+                raise CompositionError(str(root), f"submodule differs from pinned implementation: {name}")
+        result[f"gitlink:{name}"] = commit
     for name in paths:
         path = (root / name).resolve()
         if not path.is_relative_to(root) or not path.exists():
             raise CompositionError(str(root), f"identity resource is missing or outside root: {name}")
-        files = (path,) if path.is_file() else tuple(sorted(path.rglob("*")))
+        if path.is_file():
+            files = (path,)
+        else:
+            files = []
+            for directory, dirs, names in os.walk(path):
+                base = Path(directory)
+                dirs[:] = sorted(name for name in dirs if name not in {".git", "__pycache__"}
+                                 and base / name not in excluded)
+                files.extend(base / name for name in sorted(names))
         for item in files:
+            if any(item == path or path in item.parents for path in excluded):
+                continue
             if (not item.is_file() or "__pycache__" in item.parts or ".git" in item.parts or item.name == ".DS_Store"
                     or item.suffix in {".pyc", ".pyo"}):
                 continue

@@ -107,8 +107,9 @@ def _load_restart(state_dir: Path) -> dict[str, Any]:
     if value.get("schema_version") == 4 and launch is None:
         raise RuntimeError("restart metadata lacks launch selection")
     if launch is not None:
-        if (not isinstance(launch, dict) or set(launch) != {"AKA_LAUNCH_SELECTION", "AKA_LAUNCH_DIGEST"}
-                or any(not isinstance(item, str) or not item for item in launch.values())):
+        if (not isinstance(launch, dict) or not {"AKA_LAUNCH_SELECTION", "AKA_LAUNCH_DIGEST"} <= set(launch)
+                or any(not isinstance(key, str) or (item is not None and not isinstance(item, str)) for key, item in launch.items())
+                or not launch["AKA_LAUNCH_SELECTION"] or not launch["AKA_LAUNCH_DIGEST"]):
             raise RuntimeError("restart metadata has invalid launch_environment")
         import hashlib
         try:
@@ -808,7 +809,11 @@ def _restart(metadata: dict[str, Any], state_dir: Path) -> int:
     # launcher variables. Legacy schema 3 remains explicitly selection-free.
     environment.pop("AKA_LAUNCH_SELECTION", None)
     environment.pop("AKA_LAUNCH_DIGEST", None)
-    environment.update(metadata.get("launch_environment", {}))
+    for name, value in metadata.get("launch_environment", {}).items():
+        if value is None:
+            environment.pop(name, None)
+        else:
+            environment[name] = value
     environment["ATREX_ENVIRONMENT_STATE_FILE"] = metadata[
         "environment_state_file"
     ]
