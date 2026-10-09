@@ -183,6 +183,56 @@ not recorded in its rows.
 
 ## Current child and recovery behavior
 
+### Launch selection environment variables
+
+Bootstrap supplies these two keys in `Invocation.environment`:
+
+| Variable | Value |
+| --- | --- |
+| `AKA_LAUNCH_SELECTION` | Path to the launch-selection JSON snapshot, not the original profile file |
+| `AKA_LAUNCH_DIGEST` | SHA-256 digest of the snapshot's JSON content, encoded as 64 hexadecimal characters |
+
+The snapshot records the selected target, effective plugin composition and configs,
+bindings, profile-selected environment values or absence, and implementation/resource
+identities. Reconstruction uses this snapshot rather than rereading the original
+profile or patches. The digest checks the snapshot content; reconstruction also checks
+that the current implementations and declared resources match the recorded identities.
+
+Pass both keys together. If both are absent, no recorded selection was supplied;
+explicit resume then fails. A missing or empty key, unreadable file or digest mismatch
+fails before plugin setup. Forward the host-provided values rather than constructing
+them from a profile path. When merging `Invocation.environment` into a child environment,
+set string values and remove keys whose recorded value is `None`.
+
+During an invocation, Bootstrap writes `selection.json` with mode 0600 in its private
+temporary directory. The file is removed when that invocation ends, including failure
+or interruption. A child must read it while the owning invocation is alive. For a
+delayed restart, the startup implementation must persist the same content before the
+invocation ends and replace `AKA_LAUNCH_SELECTION` with the durable path; copying the
+same content leaves `AKA_LAUNCH_DIGEST` unchanged. The legacy adapter uses
+`launch-selection.json` in its recovery directory and saves the pair in
+`restart.json`'s `launch_environment`. The durable file remains available after the
+original invocation ends.
+
+With the recorded pair supplied in the environment, invoke generic reconstruction as:
+
+```sh
+aka run --resume -- startup-argument
+```
+
+`--resume` and `--profile` are mutually exclusive. Resume accepts no `--patch` or `--var`
+overrides. `run_profile()` and `aka run --profile ...` reject inherited selection keys
+instead of silently ignoring the explicit profile; use resume, or clear both keys to
+start from a profile. The historical optimizer entrypoint still detects recorded
+selections automatically and retains its checkout and selected-launcher checks.
+
+These variables carry startup composition, not campaign progress or saved business
+arguments. Pass the arguments needed by the selected target; that target owns workspace
+recovery. Generic resume does not provision a legacy checkout or install internal
+adapters. Internal optimizer recovery continues through its recorded internal launcher.
+
+### Legacy recovery records
+
 Framework children receive `AKA_LAUNCH_SELECTION` and `AKA_LAUNCH_DIGEST` through
 `Invocation.environment`. Recorded environment values are applied to children; values of
 `None` remove the corresponding keys. The legacy adapter persists `launch-selection.json` for delayed recovery. Current schema 4 `restart.json` contains

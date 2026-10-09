@@ -13,15 +13,14 @@ from .profile import resolve_profile
 
 
 def run_profile(profile: Path, invocation: Invocation, **options) -> int:
-    payload = read(os.environ)
-    if payload is not None:
-        if any(options.get(key) for key in ("patch_files", "patches", "variables")):
-            raise ValueError("cannot override a reconstructed launch selection")
-        return run_selection(restore(payload, tokens=options.get("tokens", ())), invocation)
+    """Start from a profile; recorded selections require explicit resume()."""
+    if SELECTION_ENV in os.environ or DIGEST_ENV in os.environ:
+        raise ValueError("launch selection already supplied; use resume() or clear AKA_LAUNCH_SELECTION and AKA_LAUNCH_DIGEST")
     return run_selection(resolve_profile(profile, **options), invocation)
 
 
 def resume(invocation: Invocation, *, environment=None, tokens=()) -> int:
+    """Reconstruct a recorded selection; its target owns business-state recovery."""
     payload = read(os.environ if environment is None else environment)
     if payload is None:
         raise ValueError("no continuation selection was supplied")
