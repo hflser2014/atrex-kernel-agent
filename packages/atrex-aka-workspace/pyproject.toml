@@ -15,7 +15,8 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["aka.task", "aka.task.source", "aka.task.source.*"]
+include = ["aka.task", "aka.task.source", "aka.task.source.*", "aka.task.candidate_workspace", "aka.task.candidate_workspace.*"]
 
 [tool.setuptools.package-data]
 "aka.task.source" = ["profiles/*.json", "profiles/bundles/*.json"]
+"aka.task.candidate_workspace" = ["profiles/*.json", "profiles/bundles/*.json", "*.sh"]

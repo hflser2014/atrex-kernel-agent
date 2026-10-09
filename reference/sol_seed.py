@@ -57,30 +57,13 @@ from orchestrator._bootstrap import task_modules
 task_modules()
 from aka.task.source.sol.render import _build_kernel, _render_kernel, _solution_json, _readme
 from aka.bootstrap.source import source_provider
+from aka.bootstrap.workspace import candidate_workspace
+from aka.task.candidate_workspace.initial import GITIGNORE
 
 
 # Profiling is driven by the external `profile_driver.py` seeded next to kernel.py.
 # It is deliberately NOT injected into kernel.py: ncu/rocprofv3 run `python <file>`, and an
 # in-kernel `__main__` block is silently lost the first time a session rewrites run().
-
-
-GITIGNORE = """__pycache__/
-*.pyc
-traces.jsonl
-.finalize_traces.jsonl
-submission.json
-*.ncu-rep
-profiles/*/att/*.att
-profiles/*/att/*.out
-profiles/*/att/*.pftrace
-profiles/*/att/*.otf2
-# orchestrator runtime symlinks (not part of the workspace)
-/tools
-/reference
-/skills
-/reference-projects
-/gpu-wiki
-"""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -145,36 +128,11 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit("existing V0 is not the SOL reference wrapper")
             print(f"[sol_seed] reusing V0 source {source_commit}: {ws}")
             return 0
-    for sub in ("memory", "plans", "profiles"):
-        (ws / sub).mkdir(parents=True, exist_ok=True)
-
-    # 1) ground truth, verbatim
     with source_provider("sol", operator_dir=str(op), name=args.name, framework=args.framework,
-                         platform=args.platform, gpu_wiki=args.gpu_wiki, definition=defn) as source:
-        source.materialize_ground_truth(ws)
-
-    # 2) pinned eval config (matches a submission; stable across versions)
-    (ws / "config.json").write_text(
-        json.dumps({"seed": 200, "warmup_runs": 10, "iterations": 50, "benchmark_reference": True}, indent=2) + "\n",
-        encoding="utf-8",
-    )
-
-    # 3) V0 kernel + solution
-    with source_provider("sol", operator_dir=str(op), name=args.name, framework=args.framework,
-                         platform=args.platform, gpu_wiki=args.gpu_wiki, definition=defn) as source:
-        source.materialize(ws)
-
-    # 4) harness + constraints + docs (copied from reference/)
-    (ws / "test_kernel.py").write_text((SCRIPT_DIR / "test_kernel.py").read_text(encoding="utf-8"), encoding="utf-8")
-    (ws / "profile_driver.py").write_text(
-        (SCRIPT_DIR / "profile_driver.py").read_text(encoding="utf-8"), encoding="utf-8"
-    )
-    claude = SCRIPT_DIR / "CLAUDE.md"
-    if claude.exists():
-        (ws / "CLAUDE.md").write_text(claude.read_text(encoding="utf-8"), encoding="utf-8")
-    n_wl = sum(1 for line in (op / "workload.jsonl").read_text().splitlines() if line.strip())
-    (ws / "README.md").write_text(_readme(args.name, defn, args.framework, args.platform, args.gpu_wiki, n_wl), encoding="utf-8")
-    (ws / ".gitignore").write_text(GITIGNORE, encoding="utf-8")
+                         platform=args.platform, gpu_wiki=args.gpu_wiki, definition=defn) as source, candidate_workspace() as workspace:
+        workspace.prepare_sol(ws, source, op=op, defn=defn, name=args.name,
+                              framework=args.framework, platform=args.platform,
+                              gpu_wiki=args.gpu_wiki, reference_dir=SCRIPT_DIR)
 
     # 5) V0 baseline metrics (real evaluator)
     pre_existing_v0 = (ws / "memory" / "v0.json").exists() and args.skip_bench_if_v0_exists
@@ -187,43 +145,8 @@ def main(argv: list[str] | None = None) -> int:
             print("[sol_seed] WARNING: V0 baseline did not pass all workloads — check solution.json / reference.",
                   file=sys.stderr)
 
-    # 6) Git source commit. Keep memory out of this commit so its stable SHA can
-    # be recorded without an impossible self-referential amend loop.
-    if not (ws / ".git").exists():
-        subprocess.run(["git", "init"], cwd=str(ws), check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(["git", "config", "user.email", "gpu-kernel-optimizer@local"], cwd=str(ws), check=True)
-        subprocess.run(["git", "config", "user.name", "GPU Kernel Optimizer"], cwd=str(ws), check=True)
-    source_paths = [
-        *GROUND_TRUTH,
-        "config.json",
-        "kernel.py",
-        "solution.json",
-        "test_kernel.py",
-        "profile_driver.py",
-        "README.md",
-        ".gitignore",
-    ]
-    if (ws / "CLAUDE.md").is_file():
-        source_paths.append("CLAUDE.md")
-    subprocess.run(["git", "add", *source_paths], cwd=str(ws), check=True)
-    subprocess.run(["git", "commit", "-m", "V0: baseline (SOL reference wrapper)"], cwd=str(ws), check=True,
-                   stdout=subprocess.DEVNULL)
-    # 7) Record measurement metadata in a second commit. This deliberately leaves
-    # kernel.py untouched, so memory can point at the immutable source commit.
-    v0 = ws / "memory" / "v0.json"
-    if v0.exists():
-        h = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(ws), capture_output=True, text=True).stdout.strip()
-        mem = json.loads(v0.read_text(encoding="utf-8"))
-        mem["git_commit_hash"] = h
-        mem.setdefault("optimization", {})["action_category"] = "baseline"
-        v0.write_text(json.dumps(mem, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        subprocess.run(["git", "add", "memory/v0.json"], cwd=str(ws), check=True)
-        subprocess.run(
-            ["git", "commit", "-m", "V0: record baseline measurement"],
-            cwd=str(ws),
-            check=True,
-            stdout=subprocess.DEVNULL,
-        )
+    with candidate_workspace() as workspace:
+        workspace.commit_sol(ws)
 
     print(f"[sol_seed] workspace ready: {ws}")
     return 0

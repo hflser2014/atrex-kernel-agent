@@ -20,7 +20,7 @@ OWNERS = {
     'atrex-aka-optimization': ('aka/legacy',),
     'atrex-aka-bootstrap': ('aka/bootstrap',),
     'atrex-aka-bench': ('aka/task/problem',),
-    'atrex-aka-workspace': ('aka/task/__init__.py', 'aka/task/source'),
+    'atrex-aka-workspace': ('aka/task/__init__.py', 'aka/task/git.py', 'aka/task/io.py', 'aka/task/source', 'aka/task/candidate_workspace'),
 }
 
 

@@ -10,10 +10,15 @@ from orchestrator._bootstrap import task_modules
 
 task_modules()
 from aka.bootstrap.source import source_provider
+from aka.bootstrap.workspace import candidate_workspace
 
 
 def main(argv=None):
     arguments = sys.argv[1:] if argv is None else argv
+    if arguments and arguments[0] == "--initialize":
+        _, reference_dir, entry, *inputs = arguments
+        with candidate_workspace() as workspace:
+            return workspace.initialize_kernel(Path(reference_dir), entry, inputs)
     with source_provider(kernel_demo=arguments[0]) as source:
         try:
             source.materialize(Path(arguments[1]))
