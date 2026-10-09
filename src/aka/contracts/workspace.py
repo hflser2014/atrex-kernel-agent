@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, Any
 
+from .content import SourceContent, WorkspaceFile
+
 
 @dataclass(frozen=True)
 class SourceSnapshot:
@@ -13,11 +15,9 @@ class SourceSnapshot:
 
 
 class SourceProvider(Protocol):
-    def materialize(self, workspace: Path) -> SourceSnapshot: ...
-
-
-class SolSource(SourceProvider, Protocol):
-    def materialize_ground_truth(self, workspace: Path) -> None: ...
+    def prepare(self) -> SourceContent:
+        """Describe initial source files without writing an agent workspace."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -29,8 +29,11 @@ class CandidateHandle:
 
 
 class CandidateWorkspace(Protocol):
-    def initialize_kernel(self, reference_dir: Path, entry: str, arguments: list[str]) -> int: ...
-    def prepare_sol(self, workspace: Path, source: SolSource, **options: Any) -> None: ...
+    def install_files(self, workspace: Path, files: tuple[WorkspaceFile, ...]) -> SourceSnapshot: ...
+    def initialize_kernel(self, reference_dir: Path, entry: str, arguments: list[str],
+                          *, content: SourceContent, working_directory: Path | None = None) -> int: ...
+    def prepare_sol(self, workspace: Path, content: SourceContent, *,
+                    problem_files: tuple[WorkspaceFile, ...], reference_dir: Path) -> None: ...
     def commit_sol(self, workspace: Path) -> None: ...
     def install_runtime(self, workspace: Path, atrex_bench_root: Path | None = None, **options: Any) -> None: ...
     def plan(self, workspace: Path, episode: int, base_commit: str, root: Path | None = None) -> CandidateHandle: ...

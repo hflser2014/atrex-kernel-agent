@@ -5,26 +5,28 @@ import os
 import sys
 import subprocess
 from pathlib import Path
-from aka.task.source.sol.render import _readme
+from .content import install_files
 
 GROUND_TRUTH = ("definition.json", "reference.py", "workload.jsonl")
 GITIGNORE = '__pycache__/\n*.pyc\ntraces.jsonl\n.finalize_traces.jsonl\nsubmission.json\n*.ncu-rep\nprofiles/*/att/*.att\nprofiles/*/att/*.out\nprofiles/*/att/*.pftrace\nprofiles/*/att/*.otf2\n# orchestrator runtime symlinks (not part of the workspace)\n/tools\n/reference\n/skills\n/reference-projects\n/gpu-wiki\n'
 
 
-def initialize_kernel(reference_dir, entry, arguments):
-    from aka.task.source import entry as source_entry
+def initialize_kernel(reference_dir, entry, arguments, *, content, working_directory=None):
+    if len(content.files) != 1 or content.files[0].path != "kernel.py" or content.files[0].source is None:
+        raise ValueError("kernel initialization requires one kernel.py copy contribution")
     return subprocess.run(["bash", str(Path(__file__).with_name("init.sh")),
                            *(arguments[:2] + [""] * max(0, 2 - len(arguments))),
-                           str(reference_dir), entry, str(Path(source_entry.__file__).resolve())],
+                           str(reference_dir), entry, str(content.files[0].source)],
+                          cwd=working_directory,
                           env={**os.environ, "AKA_TASK_PYTHON": sys.executable}).returncode
 
 
-def prepare_sol(ws, source, *, op, defn, name, framework, platform, gpu_wiki, reference_dir):
+def prepare_sol(ws, content, *, problem_files, reference_dir):
     for sub in ("memory", "plans", "profiles"):
         (ws / sub).mkdir(parents=True, exist_ok=True)
 
     # 1) ground truth, verbatim
-    source.materialize_ground_truth(ws)
+    install_files(ws, problem_files)
 
     # 2) pinned eval config (matches a submission; stable across versions)
     (ws / "config.json").write_text(
@@ -33,7 +35,7 @@ def prepare_sol(ws, source, *, op, defn, name, framework, platform, gpu_wiki, re
     )
 
     # 3) V0 kernel + solution
-    source.materialize(ws)
+    install_files(ws, content.files)
 
     # 4) harness + constraints + docs (copied from reference/)
     (ws / "test_kernel.py").write_text((reference_dir / "test_kernel.py").read_text(encoding="utf-8"), encoding="utf-8")
@@ -43,8 +45,7 @@ def prepare_sol(ws, source, *, op, defn, name, framework, platform, gpu_wiki, re
     claude = reference_dir / "CLAUDE.md"
     if claude.exists():
         (ws / "CLAUDE.md").write_text(claude.read_text(encoding="utf-8"), encoding="utf-8")
-    n_wl = sum(1 for line in (op / "workload.jsonl").read_text().splitlines() if line.strip())
-    (ws / "README.md").write_text(_readme(name, defn, framework, platform, gpu_wiki, n_wl), encoding="utf-8")
+    (ws / "README.md").write_text(content.readme, encoding="utf-8")
     (ws / ".gitignore").write_text(GITIGNORE, encoding="utf-8")
 
 

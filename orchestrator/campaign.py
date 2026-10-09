@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
 import shlex
 import shutil
@@ -263,7 +262,11 @@ class Campaign:
     def _ensure_agent_problem(self) -> None:
         """Schedule the original authoring session when public input preparation requires it."""
         inputs = self._problem_inputs()
-        if inputs.prepare_public():
+        public = inputs.prepare_public()
+        from aka.bootstrap.workspace import candidate_workspace
+        with candidate_workspace() as workspace:
+            workspace.install_files(self.workspace, public.files)
+        if public.ready:
             self._generated_agent_problem_digest = inputs.generated_digest
             return
         destination = self.workspace / AGENT_PROBLEM_FILENAME
@@ -277,7 +280,8 @@ class Campaign:
             prefix="aka-generalize-problem-"
         ) as raw_staging:
             staging = Path(raw_staging)
-            inputs.authoring_assets(staging)
+            with candidate_workspace() as workspace:
+                workspace.install_files(staging, inputs.authoring_assets())
             for attempt in range(2):
                 repair_context = (
                     "The current agent_problem.json failed orchestrator validation. Replace it "
@@ -310,7 +314,9 @@ class Campaign:
                         f"two attempts: {validation_error}"
                         + (f"; agent output: {detail}" if detail else "")
                     ) from exc
-                inputs.accept_generated(generated)
+                with candidate_workspace() as workspace:
+                    workspace.install_files(self.workspace, (inputs.generated_file(generated),))
+                inputs.record_generated()
                 self._generated_agent_problem_digest = inputs.generated_digest
                 print(
                     f"[orchestrator] generalized problem: generated {destination}",
@@ -807,16 +813,26 @@ class Campaign:
             raise FileNotFoundError(f"missing {WORKSPACE_INIT}")
         # workspace_init.sh builds the workspace as $(pwd)/kernel_opt_<name>,
         # so cwd must be the work_dir (or the process cwd when --workspace is absent).
-        subprocess.run(
-            ["bash", str(WORKSPACE_INIT), self.campaign_name, self.kernel_demo],
-            cwd=str(self.workspace.parent),
-            env={**os.environ, "AKA_TASK_PYTHON": sys.executable},
-            check=True,
-        )
+        from ._bootstrap import task_modules
+        task_modules()
+        from aka.bootstrap.source import source_provider
+        from aka.bootstrap.workspace import candidate_workspace
+        with source_provider(kernel_demo=self.kernel_demo) as source:
+            content = source.prepare()
+        with candidate_workspace() as workspace:
+            code = workspace.initialize_kernel(WORKSPACE_INIT.parent, str(WORKSPACE_INIT),
+                [self.campaign_name, self.kernel_demo], content=content,
+                working_directory=self.workspace.parent)
+        if code:
+            raise subprocess.CalledProcessError(code,
+                ["bash", str(WORKSPACE_INIT), self.campaign_name, self.kernel_demo])
         # Production native tasks always expose a generalized public contract. Exact shapes and
         # release metadata remain in the source operator directory and are injected only at the
         # sandbox boundary. A missing public contract is authored before the baseline session.
-        generalized = self._problem_inputs().materialize_operator_files()
+        inputs = self._problem_inputs()
+        generalized = inputs.private_reference_dir is not None
+        with candidate_workspace() as workspace:
+            workspace.install_files(self.workspace, inputs.operator_files())
         self._ensure_agent_problem()
         if generalized:
             # Seed the immutable public contract into the eventual V0 commit even when the

@@ -4,8 +4,8 @@ from aka.core.keys import ServiceKey
 CANDIDATE = ServiceKey("candidate", "CandidateWorkspace", module="aka.contracts.workspace")
 name = "candidate-workspace"
 provide = ("candidate",)
-identity_files = ("plugin.py", "provider.py", "legacy.py", "snapshot.py", "policy.py", "excludes.py", "runtime.py", "initial.py", "init.sh")
-identity_packages = ("aka.task.git", "aka.task.io", "aka.task.source.sol.render", "aka.task.source.entry")
+identity_files = ("plugin.py", "provider.py", "legacy.py", "snapshot.py", "policy.py", "excludes.py", "runtime.py", "initial.py", "content.py", "init.sh")
+identity_packages = ("aka.task.git", "aka.task.io", "aka.contracts.content")
 Config = {"type": "object", "properties": {}, "additionalProperties": False}
 
 

@@ -17,11 +17,15 @@ def main(argv=None):
     arguments = sys.argv[1:] if argv is None else argv
     if arguments and arguments[0] == "--initialize":
         _, reference_dir, entry, *inputs = arguments
+        with source_provider(kernel_demo=inputs[1] if len(inputs) > 1 else "__missing_kernel_demo__") as source:
+            content = source.prepare()
         with candidate_workspace() as workspace:
-            return workspace.initialize_kernel(Path(reference_dir), entry, inputs)
+            return workspace.initialize_kernel(Path(reference_dir), entry, inputs, content=content)
     with source_provider(kernel_demo=arguments[0]) as source:
+        content = source.prepare()
+    with candidate_workspace() as workspace:
         try:
-            source.materialize(Path(arguments[1]))
+            workspace.install_files(Path(arguments[1]), content.files)
         except subprocess.CalledProcessError as exc:
             return exc.returncode
     return 0

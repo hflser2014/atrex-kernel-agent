@@ -59,6 +59,7 @@ from aka.task.source.sol.render import _build_kernel, _render_kernel, _solution_
 from aka.bootstrap.source import source_provider
 from aka.bootstrap.workspace import candidate_workspace
 from aka.task.candidate_workspace.initial import GITIGNORE
+from aka.task.problem.inputs import sol_problem_files
 
 
 # Profiling is driven by the external `profile_driver.py` seeded next to kernel.py.
@@ -128,11 +129,12 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit("existing V0 is not the SOL reference wrapper")
             print(f"[sol_seed] reusing V0 source {source_commit}: {ws}")
             return 0
+    problem_files = sol_problem_files(op)
     with source_provider("sol", operator_dir=str(op), name=args.name, framework=args.framework,
-                         platform=args.platform, gpu_wiki=args.gpu_wiki, definition=defn) as source, candidate_workspace() as workspace:
-        workspace.prepare_sol(ws, source, op=op, defn=defn, name=args.name,
-                              framework=args.framework, platform=args.platform,
-                              gpu_wiki=args.gpu_wiki, reference_dir=SCRIPT_DIR)
+                         platform=args.platform, gpu_wiki=args.gpu_wiki, definition=defn) as source:
+        content = source.prepare()
+    with candidate_workspace() as workspace:
+        workspace.prepare_sol(ws, content, problem_files=problem_files, reference_dir=SCRIPT_DIR)
 
     # 5) V0 baseline metrics (real evaluator)
     pre_existing_v0 = (ws / "memory" / "v0.json").exists() and args.skip_bench_if_v0_exists

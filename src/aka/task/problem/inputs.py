@@ -4,8 +4,15 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 import hashlib
-import shutil
+from aka.contracts.content import PublicInputContent, WorkspaceFile
 from .layout import (AGENT_PROBLEM_FILENAME, is_sol_op, has_agent_problem, validate_private_shapes, validate_agent_problem, validate_generated_agent_problem, agent_visible_operator_files)
+
+
+def sol_problem_files(operator_dir: Path) -> tuple[WorkspaceFile, ...]:
+    """Project the original SOL ground truth for application-owned installation."""
+    return tuple(WorkspaceFile(name, text=(operator_dir / name).read_text(encoding="utf-8"))
+                 for name in ("definition.json", "reference.py", "workload.jsonl"))
+
 
 @dataclass
 class BenchInputs:
@@ -89,8 +96,8 @@ class BenchInputs:
             )
 
 
-    def prepare_public(self) -> bool:
-        """Materialize the public contract before any production optimization session.
+    def prepare_public(self) -> PublicInputContent:
+        """Describe the public contract before any production optimization session.
 
         A user-authored contract is copied verbatim. When production receives only detailed
         evaluator shapes, a dedicated clean AKA session derives the public contract in a temporary
@@ -98,18 +105,17 @@ class BenchInputs:
         """
         private_dir = self.private_reference_dir
         if private_dir is None:
-            return True
+            return PublicInputContent(True)
         destination = self.workspace / AGENT_PROBLEM_FILENAME
         shapes_path = private_dir / "shapes.json"
         provided = private_dir / AGENT_PROBLEM_FILENAME
         if provided.is_file():
             validate_agent_problem(provided, private_shapes_path=shapes_path)
-            shutil.copy2(provided, destination)
             print(
                 f"[orchestrator] generalized problem: using user-provided {provided}",
                 flush=True,
             )
-            return True
+            return PublicInputContent(True, (WorkspaceFile(AGENT_PROBLEM_FILENAME, source=provided),))
         if destination.is_file():
             validate_generated_agent_problem(
                 destination,
@@ -123,34 +129,32 @@ class BenchInputs:
                 f"{destination}",
                 flush=True,
             )
-            return True
+            return PublicInputContent(True)
         if self.optimization_mode != "production":
             raise RuntimeError(
                 "a generalized non-production campaign requires a user-provided "
                 f"{AGENT_PROBLEM_FILENAME}"
             )
 
-        return False
+        return PublicInputContent(False)
 
-    def materialize_operator_files(self) -> bool:
+    def operator_files(self) -> tuple[WorkspaceFile, ...]:
         generalized = self.private_reference_dir is not None
-        for name in agent_visible_operator_files(self.operator_dir, generalized=generalized):
-            source = self.operator_dir / name
-            if source.is_file():
-                shutil.copy2(source, self.workspace / name)
-        return generalized
+        return tuple(WorkspaceFile(name, source=self.operator_dir / name)
+                     for name in agent_visible_operator_files(self.operator_dir, generalized=generalized)
+                     if (self.operator_dir / name).is_file())
 
-    def authoring_assets(self, staging: Path) -> None:
+    def authoring_assets(self) -> tuple[WorkspaceFile, ...]:
         private_dir = self.private_reference_dir
-        for name in ("reference.py", "input.py", "shapes.json", "metadata.json"):
-            source = private_dir / name
-            if source.is_file():
-                shutil.copy2(source, staging / name)
+        return tuple(WorkspaceFile(name, source=private_dir / name)
+                     for name in ("reference.py", "input.py", "shapes.json", "metadata.json")
+                     if (private_dir / name).is_file())
 
     def validate_generated(self, generated: Path) -> None:
         validate_generated_agent_problem(generated, private_shapes_path=self.private_reference_dir / "shapes.json")
 
-    def accept_generated(self, generated: Path) -> None:
-        destination = self.workspace / AGENT_PROBLEM_FILENAME
-        shutil.copy2(generated, destination)
-        self.generated_digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+    def generated_file(self, generated: Path) -> WorkspaceFile:
+        return WorkspaceFile(AGENT_PROBLEM_FILENAME, source=generated)
+
+    def record_generated(self) -> None:
+        self.generated_digest = hashlib.sha256((self.workspace / AGENT_PROBLEM_FILENAME).read_bytes()).hexdigest()

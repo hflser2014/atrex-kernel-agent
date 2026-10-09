@@ -1,15 +1,13 @@
-"""Original kernel copy operation; no Git, workspace resources or evaluation."""
+"""Describe the original kernel copy without writing a workspace."""
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
-from .snapshot import snapshot
+from aka.contracts.content import SourceContent, WorkspaceFile
 
 
 @dataclass(frozen=True)
 class KernelSourceProvider:
     kernel_demo: str
 
-    def materialize(self, workspace: Path):
-        subprocess.run(["cp", self.kernel_demo, str(workspace / "kernel.py")], check=True)
-        return snapshot(workspace, ("kernel.py",))
+    def prepare(self):
+        return SourceContent((WorkspaceFile("kernel.py", source=Path(self.kernel_demo), copy="cp"),))
 

@@ -15,7 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="${3:?reference directory is required}"
 ENTRY="${4:-$0}"
-SOURCE_ENTRY="${5:?source entry is required}"
+SOURCE_FILE="${5:?source contribution is required}"
 
 NAME="${1:-}"
 KERNEL_DEMO="${2:-}"
@@ -59,7 +59,7 @@ if [[ ! -d .git ]]; then
 fi
 
 # Step 3: Copy kernel demo as kernel.py
-"${AKA_TASK_PYTHON:-python3}" "$SOURCE_ENTRY" "$KERNEL_DEMO" "$WORKSPACE"
+cp "$SOURCE_FILE" "$WORKSPACE/kernel.py"
 
 # Step 4: Create .gitignore
 cat > "$WORKSPACE/.gitignore" << 'EOF'

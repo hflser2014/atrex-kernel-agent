@@ -9,6 +9,10 @@ def _legacy(handle):
 
 
 class GitCandidateWorkspace(GitSnapshots):
+    def install_files(self, workspace, files):
+        from .content import install_files
+        return install_files(workspace, files)
+
     def plan(self, workspace, episode, base_commit, root=None):
         handle = EpisodeWorktree.plan(workspace, episode, base_commit, root)
         return CandidateHandle(handle.episode, handle.base_commit, handle.branch, handle.path)
@@ -29,13 +33,14 @@ class GitCandidateWorkspace(GitSnapshots):
         return promote_candidate(workspace, **options)
 
 
-    def initialize_kernel(self, reference_dir, entry, arguments):
+    def initialize_kernel(self, reference_dir, entry, arguments, *, content, working_directory=None):
         from .initial import initialize_kernel
-        return initialize_kernel(reference_dir, entry, arguments)
+        return initialize_kernel(reference_dir, entry, arguments, content=content,
+                                 working_directory=working_directory)
 
-    def prepare_sol(self, workspace, source, **options):
+    def prepare_sol(self, workspace, content, *, problem_files, reference_dir):
         from .initial import prepare_sol
-        prepare_sol(workspace, source, **options)
+        prepare_sol(workspace, content, problem_files=problem_files, reference_dir=reference_dir)
 
     def commit_sol(self, workspace):
         from .initial import commit_sol

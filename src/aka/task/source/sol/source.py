@@ -2,11 +2,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 import json
-from .render import _render_kernel, _solution_json
-from ..snapshot import snapshot
-
-GROUND_TRUTH = ("definition.json", "reference.py", "workload.jsonl")
-
+from .render import _render_kernel, _solution_json, _readme
+from aka.contracts.content import SourceContent, WorkspaceFile
 
 @dataclass(frozen=True)
 class SolSourceProvider:
@@ -17,18 +14,14 @@ class SolSourceProvider:
     gpu_wiki: str = ""
     definition: dict | None = None
 
-    def materialize_ground_truth(self, workspace):
-        op = Path(self.operator_dir)
-        for name in GROUND_TRUTH:
-            (workspace / name).write_text((op / name).read_text(encoding="utf-8"), encoding="utf-8")
-
-    def materialize(self, workspace):
+    def prepare(self):
         op = Path(self.operator_dir)
         definition = self.definition if self.definition is not None else json.loads((op / "definition.json").read_text(encoding="utf-8"))
-        (workspace / "kernel.py").write_text(
-            _render_kernel(definition, (op / "reference.py").read_text(encoding="utf-8")), encoding="utf-8")
-        (workspace / "solution.json").write_text(
-            json.dumps(_solution_json(definition, self.name, self.framework, self.platform), indent=2) + "\n",
-            encoding="utf-8")
-        return snapshot(workspace, ("kernel.py", "solution.json"))
+        files = (
+            WorkspaceFile("kernel.py", text=_render_kernel(definition, (op / "reference.py").read_text(encoding="utf-8"))),
+            WorkspaceFile("solution.json", text=json.dumps(_solution_json(definition, self.name, self.framework, self.platform), indent=2) + "\n"),
+        )
+        workloads = sum(1 for line in (op / "workload.jsonl").read_text().splitlines() if line.strip())
+        return SourceContent(files,
+                             _readme(self.name, definition, self.framework, self.platform, self.gpu_wiki, workloads))
 
