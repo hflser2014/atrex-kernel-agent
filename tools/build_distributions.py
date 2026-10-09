@@ -19,7 +19,8 @@ OWNERS = {
     'atrex-aka-contracts': ('aka/contracts',),
     'atrex-aka-optimization': ('aka/legacy',),
     'atrex-aka-bootstrap': ('aka/bootstrap',),
-    'atrex-aka-bench': ('aka/task/__init__.py', 'aka/task/problem'),
+    'atrex-aka-bench': ('aka/task/problem',),
+    'atrex-aka-workspace': ('aka/task/__init__.py', 'aka/task/source'),
 }
 
 

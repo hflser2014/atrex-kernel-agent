@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import shlex
 import shutil
@@ -809,6 +810,7 @@ class Campaign:
         subprocess.run(
             ["bash", str(WORKSPACE_INIT), self.campaign_name, self.kernel_demo],
             cwd=str(self.workspace.parent),
+            env={**os.environ, "AKA_TASK_PYTHON": sys.executable},
             check=True,
         )
         # Production native tasks always expose a generalized public contract. Exact shapes and

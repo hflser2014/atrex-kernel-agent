@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "atrex-aka-bench"
+name = "atrex-aka-workspace"
 version = "0.1.0"
-description = "AKA task problem loading and legacy input validation"
+description = "AKA initial sources and legacy candidate workspace operations"
 requires-python = ">=3.10"
 dependencies = ["atrex-aka-core==0.1.0", "atrex-aka-contracts==0.1.0"]
 
@@ -15,7 +15,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["aka.task.problem", "aka.task.problem.*"]
+include = ["aka.task", "aka.task.source", "aka.task.source.*"]
 
 [tool.setuptools.package-data]
-"aka.task.problem" = ["profiles/*.json", "profiles/bundles/*.json"]
+"aka.task.source" = ["profiles/*.json", "profiles/bundles/*.json"]

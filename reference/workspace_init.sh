@@ -57,7 +57,7 @@ if [[ ! -d .git ]]; then
 fi
 
 # Step 3: Copy kernel demo as kernel.py
-cp "$KERNEL_DEMO" "$WORKSPACE/kernel.py"
+"${AKA_TASK_PYTHON:-python3}" "$SCRIPT_DIR/kernel_source.py" "$KERNEL_DEMO" "$WORKSPACE"
 
 # Step 4: Create .gitignore
 cat > "$WORKSPACE/.gitignore" << 'EOF'
