@@ -230,7 +230,7 @@ def configure_recovery(
                 **stable_metadata,
             },
         )
-        monitor = optimize_script.resolve().parent.parent / "tools" / "monitor_optimize_tasks.py"
+        monitor = Path(__file__).resolve().parents[1] / "tools" / "monitor_optimize_tasks.py"
         recover = directory / "recover.sh"
         durable_write_text(
             recover,

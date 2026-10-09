@@ -74,6 +74,8 @@ if __name__ == "__main__":
     sys.modules["orchestrator.optimize"] = sys.modules[__name__]
     setattr(_orchestrator_package, "optimize", sys.modules[__name__])
 
+from orchestrator.process_launch import optimizer_entrypoint
+
 try:
     from . import agent_runtime as _agent_runtime
     from .campaign import Campaign
@@ -306,7 +308,7 @@ def dispatch_framework_campaigns(
             )
             cmd = [
                 sys.executable,
-                str(Path(__file__).resolve()),
+                str(optimizer_entrypoint()),
                 *common_argv,
                 "--framework",
                 framework,
@@ -838,7 +840,7 @@ def _run_main(argv: Optional[list[str]] = None) -> int:
         configure_recovery(
             workspace_base=workspace_base,
             raw_argv=raw_argv,
-            optimize_script=Path(__file__),
+            optimize_script=optimizer_entrypoint(),
             sandbox_hardware=sandbox_hardware,
             ssh_target=args.sandbox_ssh,
             ssh_init=args.sandbox_ssh_init,
