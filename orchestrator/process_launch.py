@@ -23,6 +23,9 @@ def use_optimizer_entrypoint(script: Path) -> Iterator[Path]:
     The caller invokes optimize.main inside this scope. New processes execute
     the selected script with the existing interpreter and argv; that script is
     responsible for rebuilding its configuration and adapters.
+
+    Selection is local to the current context; worker threads must explicitly
+    propagate that context or select their entrypoint again.
     """
     selected = Path(script).expanduser().resolve()
     if not selected.is_file():

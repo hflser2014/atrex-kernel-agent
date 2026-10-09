@@ -36,7 +36,9 @@ class Application(Protocol):
     def run(self, request: ApplicationRequest) -> int:
         """Run once; preserve exit codes, SystemExit and recovery exceptions.
 
-        The caller owns the composition. Implementations do not dispose borrowed
+        The assembly owner constructs implementations with explicit dependencies
+        before invocation and owns the composition. Implementations do not select
+        plugins, resolve services from a Context/Root/BootReport, dispose borrowed
         dependencies or silently construct another default application.
         """
         ...

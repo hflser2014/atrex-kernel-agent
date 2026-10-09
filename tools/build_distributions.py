@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the three PR1 distributions; wheels are built from their sdists.
+"""Build the four PR1 distributions; wheels are built from their sdists.
 
 Install the `build` frontend in a build environment first. Package directories
 contain metadata, not duplicate source trees; invoke this script from any cwd.
@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OWNERS = {
     'atrex-aka-core': ('aka/__init__.py', 'aka/__main__.py', 'aka/cli.py', 'aka/core'),
     'atrex-aka-contracts': ('aka/contracts',),
-    'atrex-aka-optimization': ('aka/bootstrap',),
+    'atrex-aka-optimization': ('aka/application',),
+    'atrex-aka-bootstrap': ('aka/bootstrap',),
 }
 
 

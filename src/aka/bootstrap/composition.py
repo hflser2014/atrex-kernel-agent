@@ -1,4 +1,4 @@
-"""Application-owned variable namespace and profile selection."""
+"""Bootstrap-owned application variable namespace and profile selection."""
 from __future__ import annotations
 
 from pathlib import Path
