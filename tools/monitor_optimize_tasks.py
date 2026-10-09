@@ -124,7 +124,7 @@ def _load_restart(state_dir: Path) -> dict[str, Any]:
                 or not launch["AKA_LAUNCH_SELECTION"] or not launch["AKA_LAUNCH_DIGEST"]):
             raise RuntimeError("restart metadata has invalid launch_environment")
         try:
-            payload = Path(launch["AKA_LAUNCH_SELECTION"]).read_text()
+            payload = Path(launch["AKA_LAUNCH_SELECTION"]).read_text(encoding="utf-8")
         except OSError as exc:
             raise RuntimeError(f"restart launch selection is unavailable: {exc}") from exc
         if hashlib.sha256(payload.encode()).hexdigest() != launch["AKA_LAUNCH_DIGEST"]:

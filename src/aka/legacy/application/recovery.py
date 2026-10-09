@@ -47,9 +47,9 @@ def complete_migration(directory: Path, *, owner: bool, repo_root=None, environm
     if not owner:
         raise RuntimeError("only the recovery owner can complete a pending launch migration")
     try:
-        record = json.loads(path.read_text())
+        record = json.loads(path.read_text(encoding="utf-8"))
         previous, following, payload = _validate(directory, record)
-        current = json.loads((directory / "restart.json").read_text())
+        current = json.loads((directory / "restart.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise RuntimeError(f"cannot validate recovery migration: {exc}") from exc
     if current != previous and current != following:
@@ -67,7 +67,7 @@ def complete_migration(directory: Path, *, owner: bool, repo_root=None, environm
             raise RuntimeError("cannot replace a pending recovery launch selection")
     selection_path = directory / "launch-selection.json"
     if has_selection(selection_path):
-        if selection_path.is_symlink() or selection_path.read_text() != payload:
+        if selection_path.is_symlink() or selection_path.read_text(encoding="utf-8") != payload:
             raise RuntimeError("recovery migration does not match the durable launch selection")
     elif current == following:
         # A committed schema-4 record losing its selection is corruption, not
@@ -78,7 +78,7 @@ def complete_migration(directory: Path, *, owner: bool, repo_root=None, environm
         durable_write_text(selection_path, payload)
     if current == previous:
         durable_write_json(directory / "restart.json", following, indent=2, ensure_ascii=False)
-    durable_unlink(path)
+    durable_unlink(path, missing_ok=True)
     return following["launch_environment"]
 
 

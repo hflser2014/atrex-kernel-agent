@@ -48,7 +48,7 @@ def requires_default_recovery():
             raise RuntimeError("recovery launch selection exists without restart metadata")
         return False
     try:
-        existing = json.loads(state.with_name("restart.json").read_text())
+        existing = json.loads(state.with_name("restart.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise RuntimeError(f"cannot validate active recovery metadata: {exc}") from exc
     if not isinstance(existing, dict):
@@ -89,7 +89,7 @@ def recovery_environment(directory: Path, *, persist=True):
         return {}
     path = directory / "launch-selection.json"
     if path.exists():
-        if path.read_text() != payload:
+        if path.read_text(encoding="utf-8") != payload:
             raise RuntimeError("refusing to replace recovery launch selection with a different composition")
     elif persist:
         from orchestrator.durable_state import durable_write_text

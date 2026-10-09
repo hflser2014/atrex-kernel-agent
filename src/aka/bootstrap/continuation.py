@@ -49,7 +49,7 @@ def read(environment: Mapping[str, str | None]) -> str | None:
     if not path or not expected:
         raise CompositionError("continuation", "selection path and digest must travel together")
     try:
-        payload = Path(path).read_text()
+        payload = Path(path).read_text(encoding="utf-8")
     except OSError as exc:
         raise CompositionError("continuation", f"cannot read selection: {exc}") from exc
     if digest(payload) != expected:

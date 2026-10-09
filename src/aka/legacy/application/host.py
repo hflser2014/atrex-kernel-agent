@@ -48,6 +48,8 @@ def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR
             configuration={"environment_state_file": str(Path(os.environ["ATREX_ENVIRONMENT_STATE_FILE"]).expanduser().resolve()),
                 "cwd": str(Path.cwd().resolve()), "command": [str(Path(sys.executable).resolve()),
                 str(Path(script).resolve()), *(sys.argv[1:] if request.argv is None else request.argv)]})
+        if environment is None:
+            raise RuntimeError("recovery migration completed concurrently; retry with the recorded launch selection")
         with invocation_environment(environment):
             return run_application(request)
     optimizer = sys.modules.get("orchestrator.optimize")
