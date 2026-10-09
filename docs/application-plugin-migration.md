@@ -252,6 +252,15 @@ selection is missing, corrupt or mismatched. Schema 3 retains main's environment
 recovery semantics; historical environment values that were never recorded are
 not reconstructed. Broader restart-format redesign is deferred.
 
+The owner records a private `launch-migration.json` only after validating the old
+configuration. It contains the exact old/new restart metadata and frozen selection,
+so an interrupted write can be completed by the monitor or the legacy owner on the
+next attempt. Replay verifies the current restart metadata and implementation/resource
+identity before writing, and removes the migration record after committing. Unknown
+or mismatched migration records are refused. A committed schema 4 record with a missing
+selection is never repaired as a legacy migration; a selection surviving missing
+`restart.json` also causes refusal before startup.
+
 Existing tool-plugin locks also record absolute plugin paths and interpreter identity.
 Retain those inputs and do not rewrite locks to bypass identity checks.
 

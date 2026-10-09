@@ -12,7 +12,9 @@ from aka.bootstrap.host import run_selection
 from aka.bootstrap.profile import resolve_profile
 from aka.contracts.startup import Invocation
 from aka.core.errors import CompositionError
-from .processes import default_recovery_profile, invocation_environment, requires_default_recovery
+from .processes import (default_recovery_profile, invocation_environment,
+                        pending_recovery_directory, requires_default_recovery)
+from .recovery import complete_migration
 
 PROFILES_DIR = Path(__file__).with_name("profiles")
 COMPOSITION_VARS = ("repo_root", "workspace", "campaign_name", "operator", "platform", "arch",
@@ -32,6 +34,22 @@ def application_variables(repo_root, values=None):
 
 def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR,
                     patch_files=(), patches=(), variables=None, tokens=()):
+    pending = pending_recovery_directory()
+    if pending is not None:
+        if (profile != "application" or Path(profiles_dir).resolve() != PROFILES_DIR.resolve()
+                or patch_files or patches or variables or tokens):
+            raise CompositionError("recovery", "cannot override a pending default legacy launch migration")
+        process_launch = sys.modules.get("orchestrator.process_launch")
+        script = (process_launch.optimizer_entrypoint() if process_launch is not None
+                  else request.repo_root / "orchestrator/optimize.py")
+        environment = complete_migration(pending,
+            owner=os.environ.get("ATREX_ENVIRONMENT_RECOVERY_OWNER", "1") != "0",
+            repo_root=request.repo_root, environment=os.environ,
+            configuration={"environment_state_file": str(Path(os.environ["ATREX_ENVIRONMENT_STATE_FILE"]).expanduser().resolve()),
+                "cwd": str(Path.cwd().resolve()), "command": [str(Path(sys.executable).resolve()),
+                str(Path(script).resolve()), *(sys.argv[1:] if request.argv is None else request.argv)]})
+        with invocation_environment(environment):
+            return run_application(request)
     optimizer = sys.modules.get("orchestrator.optimize")
     if optimizer is not None and Path(optimizer.__file__).resolve() != request.repo_root / "orchestrator/optimize.py":
         raise RuntimeError("a different AKA checkout is already loaded")

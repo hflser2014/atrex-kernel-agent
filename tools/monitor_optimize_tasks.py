@@ -65,6 +65,11 @@ class RecoveryCleanupUnverified(RuntimeError):
 
 
 def _load_restart(state_dir: Path) -> dict[str, Any]:
+    source = _REPO_ROOT / "src"
+    if (source / "aka/legacy/application/recovery.py").is_file() and str(source) not in sys.path:
+        sys.path.insert(0, str(source))
+    from aka.legacy.application.recovery import complete_migration, has_selection
+    complete_migration(state_dir, owner=True)
     path = state_dir / "restart.json"
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -107,7 +112,7 @@ def _load_restart(state_dir: Path) -> dict[str, Any]:
     launch = value.get("launch_environment")
     selection_path = state_dir / "launch-selection.json"
     if (value.get("schema_version") == 3 and "launch_environment" not in value
-            and (selection_path.exists() or selection_path.is_symlink())):
+            and has_selection(selection_path)):
         raise RuntimeError("schema 3 recovery has an unreferenced launch selection")
     if "launch_environment" in value and launch is None:
         raise RuntimeError("restart metadata has invalid launch_environment")

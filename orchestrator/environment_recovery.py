@@ -186,6 +186,16 @@ def configure_recovery(
         os.environ[ENVIRONMENT_STATE_ENV] = str(inherited)
     ensure_private_directory(directory)
 
+    from aka.legacy.application.recovery import MIGRATION_FILE, complete_migration, has_selection
+    from aka.legacy.application.processes import child_environment
+    if has_selection(directory / MIGRATION_FILE) and not child_environment():
+        raise RuntimeError("pending recovery migration requires reconstructed launch selection")
+    complete_migration(directory, owner=owner,
+        environment=child_environment(),
+        configuration={**stable_metadata, "environment_state_file": str(inherited)})
+    if not (directory / "restart.json").is_file() and has_selection(directory / "launch-selection.json"):
+        raise RuntimeError("recovery launch selection exists without restart metadata")
+
     os.environ["ATREX_SANDBOX_SSH"] = ssh_target
     os.environ["ATREX_SANDBOX_SSH_INIT"] = ssh_init
     os.environ["ATREX_SANDBOX_SSH_RUNTIME_BINDS"] = json.dumps(
@@ -221,7 +231,7 @@ def configure_recovery(
         legacy_upgrade = (
             existing.get("schema_version") == 3
             and "launch_environment" not in existing
-            and not (selection_path.exists() or selection_path.is_symlink())
+            and not has_selection(selection_path)
             and bool(selection_environment)
             and schema3_recovery_allowed()
             and owner
@@ -236,7 +246,7 @@ def configure_recovery(
         ]
         if ((existing.get("launch_environment", {}) != selection_environment and not legacy_upgrade)
                 or (existing.get("schema_version") == 3 and "launch_environment" not in existing
-                    and (selection_path.exists() or selection_path.is_symlink()))):
+                    and has_selection(selection_path))):
             mismatches.append("launch_environment")
         if existing.get("environment_state_file") != str(inherited):
             mismatches.append("environment_state_file")
@@ -247,17 +257,21 @@ def configure_recovery(
             )
     if owner or not restart_path.is_file():
         # Validate all existing metadata before creating or upgrading records.
-        recovery_environment(directory)
-        _write_private_json(
-            restart_path,
-            {
-                **(existing if legacy_upgrade else {}),
-                "schema_version": 4 if selection_environment else 3,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "environment_state_file": str(inherited),
-                **stable_metadata,
-            },
-        )
+        metadata = {
+            **(existing if legacy_upgrade else {}),
+            "schema_version": 4 if selection_environment else 3,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "environment_state_file": str(inherited),
+            **stable_metadata,
+        }
+        if legacy_upgrade:
+            from aka.bootstrap.continuation import read as read_launch_selection
+            from aka.legacy.application.processes import child_environment
+            from aka.legacy.application.recovery import begin_migration
+            begin_migration(directory, existing, metadata, read_launch_selection(child_environment()))
+        else:
+            recovery_environment(directory)
+            _write_private_json(restart_path, metadata)
         monitor = Path(__file__).resolve().parents[1] / "tools" / "monitor_optimize_tasks.py"
         recover = directory / "recover.sh"
         durable_write_text(

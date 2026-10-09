@@ -8,6 +8,7 @@ import json
 import os
 
 from aka.bootstrap.continuation import SELECTION_ENV, DIGEST_ENV, digest, read
+from .recovery import MIGRATION_FILE, has_selection
 
 _launch_environment = ContextVar("aka_legacy_launch_environment", default=None)
 _schema3_default = ContextVar("aka_legacy_schema3_default", default=False)
@@ -27,13 +28,24 @@ def schema3_recovery_allowed():
     return _schema3_default.get()
 
 
+def pending_recovery_directory():
+    value = os.environ.get("ATREX_ENVIRONMENT_STATE_FILE", "").strip()
+    if not value:
+        return None
+    directory = Path(value).expanduser().resolve().parent
+    return directory if has_selection(directory / MIGRATION_FILE) else None
+
+
 def requires_default_recovery():
     """Recognize selection-free main state before resolving or invoking plugins."""
     state_value = os.environ.get("ATREX_ENVIRONMENT_STATE_FILE", "").strip()
     if not state_value:
         return False
     state = Path(state_value).expanduser().resolve()
+    selection = state.with_name("launch-selection.json")
     if not state.with_name("restart.json").is_file():
+        if has_selection(selection):
+            raise RuntimeError("recovery launch selection exists without restart metadata")
         return False
     try:
         existing = json.loads(state.with_name("restart.json").read_text())
@@ -41,9 +53,8 @@ def requires_default_recovery():
         raise RuntimeError(f"cannot validate active recovery metadata: {exc}") from exc
     if not isinstance(existing, dict):
         raise RuntimeError("cannot validate active recovery metadata: expected an object")
-    selection = state.with_name("launch-selection.json")
     if existing.get("schema_version") == 3 and "launch_environment" not in existing:
-        if selection.exists() or selection.is_symlink():
+        if has_selection(selection):
             raise RuntimeError("schema 3 recovery has an unreferenced launch selection")
         return True
     # New records must be reconstructed, never resolved as a fresh default.
