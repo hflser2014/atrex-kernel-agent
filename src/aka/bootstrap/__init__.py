@@ -1,1 +1,1 @@
-"""Optimization application assembly, kept outside the generic Core."""
+"""Generic profile-selected startup and process reconstruction host."""

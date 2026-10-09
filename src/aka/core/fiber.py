@@ -88,11 +88,13 @@ class Fiber:
         realm: Realm,
         scope: Scope,
         required: bool = False,
+        config_resolved: bool = False,
         parent: "Fiber | None" = None,
     ):
         self.root = root
         self.declaration = declaration
         self.raw_config = dict(raw_config)
+        self.config_resolved = config_resolved
         self.entry_id = entry_id
         self.realm = realm
         self.scope = scope
@@ -283,7 +285,7 @@ class Fiber:
     # -- config ----------------------------------------------------------
 
     def _resolve_config(self) -> Mapping[str, Any]:
-        interpolated = apply_interpolation(
+        interpolated = self.raw_config if self.config_resolved else apply_interpolation(
             self.raw_config,
             allowlist=self.declaration.interpolate,
             variables=self.root.variables,
@@ -293,7 +295,7 @@ class Fiber:
             entry_id=self.entry_id, module=self.declaration.module, config=interpolated
         )
         draft = self.root.bus.waterfall(INTERNAL_CONFIG, draft, lambda value: value)
-        merged = {**self.declaration.defaults, **dict(draft.config)}
+        merged = dict(draft.config) if self.config_resolved else {**self.declaration.defaults, **dict(draft.config)}
         schema = self.declaration.config_schema
         if schema is None:
             if merged:
@@ -418,6 +420,7 @@ class Root:
         *,
         entry_id: str = "",
         required: bool = False,
+        config_resolved: bool = False,
         isolate: Sequence[str] = (),
         parent: Fiber | None = None,
         scope: Scope | None = None,
@@ -440,6 +443,7 @@ class Root:
             realm=realm,
             scope=base_scope,
             required=required,
+            config_resolved=config_resolved,
             parent=parent,
         )
         self.fibers[entry_id] = fiber

@@ -1,0 +1,77 @@
+"""Historical application entry adapts checkout inputs to a generic launch profile."""
+from __future__ import annotations
+
+import os
+import sys
+from dataclasses import replace
+from pathlib import Path
+
+from aka.bootstrap.continuation import read, restore
+from aka.bootstrap.host import run_selection
+from aka.bootstrap.profile import resolve_profile
+from aka.contracts.startup import Invocation
+from aka.core.boot import compose
+from aka.core.errors import CompositionError
+
+PROFILES_DIR = Path(__file__).with_name("profiles")
+COMPOSITION_VARS = ("repo_root", "workspace", "campaign_name", "operator", "platform", "arch",
+                    "framework", "optimization_mode")
+
+
+def application_variables(repo_root, values=None):
+    values = dict(values or {})
+    if set(values) - set(COMPOSITION_VARS):
+        raise CompositionError("variables", "unsupported application variables")
+    root = Path(repo_root).resolve()
+    if "repo_root" in values and (not isinstance(values["repo_root"], str)
+            or not values["repo_root"].strip() or Path(values["repo_root"]).resolve() != root):
+        raise CompositionError("variables", "repo_root conflicts with explicit repo_root")
+    return {**{name: str(values.get(name, "")) for name in COMPOSITION_VARS}, "repo_root": str(root)}
+
+
+def compose_application(repo_root, *, profile="application", profiles_dir=PROFILES_DIR,
+                        patch_files=(), patches=(), variables=None):
+    return compose(profile, profiles_dir=Path(profiles_dir) / "compositions",
+                   patch_files=patch_files, patches=patches,
+                   variables=application_variables(repo_root, variables))
+
+
+def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR,
+                    patch_files=(), patches=(), variables=None, tokens=()):
+    optimizer = sys.modules.get("orchestrator.optimize")
+    if optimizer is not None and Path(optimizer.__file__).resolve() != request.repo_root / "orchestrator/optimize.py":
+        raise RuntimeError("a different AKA checkout is already loaded")
+    payload = read(os.environ)
+    if payload is not None:
+        if profile != "application" or Path(profiles_dir) != PROFILES_DIR or patch_files or patches or variables:
+            raise CompositionError("continuation", "cannot override a reconstructed launch selection")
+        selection = restore(payload, tokens=tokens)
+        process_launch = sys.modules.get("orchestrator.process_launch")
+        script = (process_launch.optimizer_entrypoint() if process_launch is not None
+                  else request.repo_root / "orchestrator/optimize.py")
+        recorded_root, recorded_paths = selection.resources[-1]
+        if (recorded_root / recorded_paths[0]).resolve() != Path(script).resolve():
+            raise RuntimeError("reconstructed launch selected a different optimizer entrypoint")
+        if selection.composition.variables.get("repo_root") != str(request.repo_root):
+            raise RuntimeError("a different AKA checkout is requested by continuation")
+    else:
+        selection = resolve_profile(Path(profiles_dir) / f"{profile}.json",
+            patch_files=patch_files, patches=patches, tokens=tokens,
+            variables=application_variables(request.repo_root, variables))
+        # A selected internal launcher is an explicit process dependency. Avoid
+        # importing the optimizer during assembly or modifying its module identity.
+        process_launch = sys.modules.get("orchestrator.process_launch")
+        script = (process_launch.optimizer_entrypoint() if process_launch is not None
+                  else request.repo_root / "orchestrator/optimize.py")
+        script = Path(script).resolve()
+        paths = [script.name]
+        if script != request.repo_root / "orchestrator/optimize.py":
+            # Hash static internal adapters and selected wiki; generated runtime
+            # views and trace records are outputs, not implementation identity.
+            paths.extend(name for name in ("scripts", "gpu-wiki", "skills")
+                         if (script.parent / name).exists())
+        bindings = process_launch.optimizer_resources() if process_launch is not None else ()
+        bound_resources = tuple((path.parent, (path.name,)) if path.is_file() else (path, (".",))
+                                for path in bindings)
+        selection = replace(selection, resources=(*selection.resources, *bound_resources, (script.parent, tuple(paths))))
+    return run_selection(selection, Invocation(request.argv))

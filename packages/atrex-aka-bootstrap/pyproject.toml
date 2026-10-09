@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "atrex-aka-bootstrap"
 version = "0.1.0"
-description = "AKA Application composition and startup host"
+description = "AKA generic profile-selected startup host"
 requires-python = ">=3.10"
-dependencies = ["atrex-aka-core==0.1.0", "atrex-aka-contracts==0.1.0", "atrex-aka-optimization==0.1.0"]
+dependencies = ["atrex-aka-core==0.1.0", "atrex-aka-contracts==0.1.0"]
 
 [project.entry-points."aka.commands"]
-optimize = "aka.bootstrap.cli:main"
+run = "aka.bootstrap.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -19,6 +19,3 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["aka.bootstrap", "aka.bootstrap.*"]
-
-[tool.setuptools.package-data]
-"aka.bootstrap" = ["profiles/*.json", "profiles/bundles/*.json"]

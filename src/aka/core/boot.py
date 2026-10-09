@@ -23,7 +23,7 @@ def validate(composition: ResolvedComposition) -> None:
     for row in composition.enabled:
         try:
             declaration = declare(import_plugin(row.name)).with_extra_inject(row.inject)
-            _validate_plugin_config(declaration, row, composition.variables)
+            _validate_plugin_config(declaration, row, composition.variables, resolved=composition.configs_resolved)
         except Exception as exc:
             failures.append((row.id, str(exc)))
     if failures:
@@ -69,54 +69,8 @@ def boot(
     workspace: Path | None = None,
     lock_mode: str | None = None,
 ) -> BootReport:
-    seams = token_table(tokens)
-    unknown = sorted(set(required_services) - set(seams))
-    if unknown:
-        raise BootFailure(tuple((name, "required service has no registered token") for name in unknown))
-    declarations = {}
-    preflight_failures = []
-    required_ids = {row.id for row in composition.rows if row.required} | set(required_rows)
-    for row in composition.rows:
-        if row.disabled:
-            declarations[row.id] = None
-            continue
-        try:
-            declarations[row.id] = declare(import_plugin(row.name), known_seams=seams).with_extra_inject(row.inject)
-        except Exception as exc:
-            declarations[row.id] = None
-            if row.id in required_ids:
-                preflight_failures.append((row.id, str(exc)))
-    if preflight_failures:
-        raise BootFailure(tuple(preflight_failures))
-    config_failures = []
-    effective_configs = {}
-    for row in composition.enabled:
-        declaration = declarations[row.id]
-        if declaration is None:
-            continue
-        try:
-            effective_configs[row.id] = _validate_plugin_config(
-                declaration, row, composition.variables
-            )
-        except Exception as exc:
-            config_failures.append((row.id, str(exc)))
-    if config_failures:
-        raise BootFailure(tuple(config_failures))
-    collisions: dict[str, list[str]] = {}
-    for row in composition.enabled:
-        declaration = declarations[row.id]
-        if declaration is None:
-            continue
-        for service in declaration.provide:
-            if service not in row.isolate:
-                collisions.setdefault(service, []).append(row.id)
-    duplicates = tuple(
-        (service, "single implementation is provided by rows " + ", ".join(rows))
-        for service, rows in sorted(collisions.items())
-        if len(rows) > 1 and seams[service].cardinality == "single"
-    )
-    if duplicates:
-        raise BootFailure(duplicates)
+    seams, declarations, effective_configs = _prepare(composition, tokens, required_rows, required_services)
+    required_ids = composition.required | set(required_rows)
     if lock_mode is not None:
         if workspace is None:
             raise ValueError("workspace is required with lock_mode")
@@ -149,17 +103,84 @@ def boot(
     return replace(report, lock_differences=lock_diffs)
 
 
+def _prepare(composition, tokens, required_rows=(), required_services=()):
+    seams = token_table(tokens)
+    unknown = sorted(set(required_services) - set(seams))
+    if unknown:
+        raise BootFailure(tuple((name, "required service has no registered token") for name in unknown))
+    declarations = {}
+    preflight_failures = []
+    required_ids = {row.id for row in composition.rows if row.required} | set(required_rows)
+    for row in composition.rows:
+        if row.disabled:
+            declarations[row.id] = None
+            continue
+        try:
+            declarations[row.id] = declare(import_plugin(row.name), known_seams=seams).with_extra_inject(row.inject)
+        except Exception as exc:
+            declarations[row.id] = None
+            if row.id in required_ids:
+                preflight_failures.append((row.id, str(exc)))
+    if preflight_failures:
+        raise BootFailure(tuple(preflight_failures))
+    config_failures = []
+    effective_configs = {}
+    for row in composition.enabled:
+        declaration = declarations[row.id]
+        if declaration is None:
+            continue
+        try:
+            effective_configs[row.id] = _validate_plugin_config(
+                declaration, row, composition.variables, resolved=composition.configs_resolved
+            )
+        except Exception as exc:
+            config_failures.append((row.id, str(exc)))
+    if config_failures:
+        raise BootFailure(tuple(config_failures))
+    collisions: dict[str, list[str]] = {}
+    for row in composition.enabled:
+        declaration = declarations[row.id]
+        if declaration is None:
+            continue
+        for service in declaration.provide:
+            if service not in row.isolate:
+                collisions.setdefault(service, []).append(row.id)
+    duplicates = tuple(
+        (service, "single implementation is provided by rows " + ", ".join(rows))
+        for service, rows in sorted(collisions.items())
+        if len(rows) > 1 and seams[service].cardinality == "single"
+    )
+    if duplicates:
+        raise BootFailure(duplicates)
+    return seams, declarations, effective_configs
+
+
+def freeze(composition: ResolvedComposition, *, tokens: Iterable[ServiceKey] = ()):
+    """Capture effective configs and implementation identity without applying plugins.
+
+    The returned composition no longer depends on environment interpolation or
+    mutable plugin defaults. Hosts may serialize it for process reconstruction.
+    """
+    seams, declarations, configs = _prepare(composition, tokens)
+    effective = replace(composition, rows=tuple(
+        replace(row, config=dict(configs[row.id])) if row.id in configs else row
+        for row in composition.rows
+    ), variables=dict(composition.variables), configs_resolved=True)
+    identity = snapshot(effective, declarations, seams.values(), effective_configs=configs)
+    return effective, identity
+
+
 def _validate_plugin_config(
-    declaration: Any, row: Any, variables: Mapping[str, str]
+    declaration: Any, row: Any, variables: Mapping[str, str], *, resolved: bool = False
 ) -> Mapping[str, Any]:
     """Validate one row's effective config before lock reconciliation or plugin apply."""
-    config = apply_interpolation(
+    config = row.config if resolved else apply_interpolation(
         row.config,
         allowlist=declaration.interpolate,
         variables=variables,
         source=f"entry:{row.id}",
     )
-    merged = {**declaration.defaults, **dict(config)}
+    merged = dict(config) if resolved else {**declaration.defaults, **dict(config)}
     if declaration.config_schema is None and merged:
         raise ValueError("plugin declares no Config schema")
     if declaration.config_schema is not None:
@@ -169,4 +190,4 @@ def _validate_plugin_config(
     return merged
 
 
-__all__ = ["DEFAULT_PROFILE", "PROFILES_DIR", "boot", "compose", "token_table", "validate"]
+__all__ = ["DEFAULT_PROFILE", "PROFILES_DIR", "boot", "compose", "freeze", "token_table", "validate"]

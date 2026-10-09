@@ -198,6 +198,11 @@ def configure_recovery(
     os.environ.pop("ATREX_SANDBOX_PROFILE", None)
     os.environ[RECOVERY_OWNER_ENV] = "1" if owner else "0"
 
+    from aka.legacy.application.processes import recovery_environment
+    selection_environment = recovery_environment(directory)
+    if selection_environment:
+        stable_metadata["launch_environment"] = selection_environment
+
     restart_path = directory / "restart.json"
     if restart_path.is_file():
         try:
@@ -213,6 +218,8 @@ def configure_recovery(
             # Pre-preflight metadata is upgraded by the same validated owner.
             and not (key == "runtime_health_command" and key not in existing)
         ]
+        if existing.get("launch_environment", {}) != selection_environment:
+            mismatches.append("launch_environment")
         if existing.get("environment_state_file") != str(inherited):
             mismatches.append("environment_state_file")
         if mismatches:
@@ -224,7 +231,7 @@ def configure_recovery(
         _write_private_json(
             restart_path,
             {
-                "schema_version": 3,
+                "schema_version": 4 if selection_environment else 3,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "environment_state_file": str(inherited),
                 **stable_metadata,

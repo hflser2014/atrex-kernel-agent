@@ -71,7 +71,7 @@ def load(
     try:
         for row in composition.enabled:
             try:
-                _mount(root, row, seams)
+                _mount(root, row, seams, configs_resolved=composition.configs_resolved)
             except CoreError as exc:
                 unresolved.append((row.id, f"{type(exc).__name__}: {exc}"))
         root.settle()
@@ -133,7 +133,7 @@ def load(
     )
 
 
-def _mount(root: Root, row: Row, seams: Mapping[str, ServiceKey] | None) -> None:
+def _mount(root: Root, row: Row, seams: Mapping[str, ServiceKey] | None, *, configs_resolved=False) -> None:
     module = import_plugin(row.name)
     if seams is not None:
         # Row-level inject and isolate bypass declare()'s seam check, so validate them here:
@@ -152,6 +152,7 @@ def _mount(root: Root, row: Row, seams: Mapping[str, ServiceKey] | None) -> None
         entry_id=row.id,
         required=row.required,
         isolate=row.isolate,
+        config_resolved=configs_resolved,
     )
 
 

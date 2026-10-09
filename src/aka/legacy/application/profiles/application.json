@@ -1,0 +1,7 @@
+{
+  "api_version": 1,
+  "composition": "application",
+  "target": "startup",
+  "required_services": [],
+  "resources": [{"root": "${aka:repo_root}", "paths": ["orchestrator", "long_horizon", "tools", "assets", "agents", "skills", "reference", "plugins", "plugin_runtime", "gpu-wiki", "3rdparty"]}]
+}

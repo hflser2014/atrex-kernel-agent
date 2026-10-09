@@ -5,9 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "atrex-aka-optimization"
 version = "0.1.0"
-description = "AKA optimization Application with explicit dependencies"
+description = "AKA legacy optimizer and default launch profiles"
 requires-python = ">=3.10"
-dependencies = ["atrex-aka-contracts==0.1.0"]
+dependencies = ["atrex-aka-bootstrap==0.1.0"]
+
+[project.entry-points."aka.commands"]
+optimize = "aka.legacy.application.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -15,4 +18,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["aka.application", "aka.application.*"]
+include = ["aka.legacy", "aka.legacy.*"]
+
+[tool.setuptools.package-data]
+"aka.legacy.application" = ["profiles/*.json", "profiles/compositions/*.json", "profiles/compositions/bundles/*.json"]

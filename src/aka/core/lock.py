@@ -73,6 +73,25 @@ def _identity_names(module: str, *, exclude_metadata: bool = False) -> tuple[str
     )
 
 
+def resource_identity(root: Path, paths: Iterable[str]) -> dict[str, str]:
+    """Hash explicitly selected resources, including tree membership, within a root."""
+    root = Path(root).resolve()
+    result = {}
+    for name in paths:
+        path = (root / name).resolve()
+        if not path.is_relative_to(root) or not path.exists():
+            raise CompositionError(str(root), f"identity resource is missing or outside root: {name}")
+        files = (path,) if path.is_file() else tuple(sorted(path.rglob("*")))
+        for item in files:
+            if (not item.is_file() or "__pycache__" in item.parts or ".git" in item.parts or item.name == ".DS_Store"
+                    or item.suffix in {".pyc", ".pyo"}):
+                continue
+            if not item.resolve().is_relative_to(root):
+                raise CompositionError(str(root), f"identity resource escapes root: {item}")
+            result[item.relative_to(root).as_posix()] = hashlib.sha256(item.read_bytes()).hexdigest()
+    return result
+
+
 def snapshot(
     composition: ResolvedComposition,
     declarations: Mapping[str, PluginDeclaration | None],

@@ -4,37 +4,15 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
-from contextlib import contextmanager
-from contextvars import ContextVar
 from pathlib import Path
 
-from aka.application.legacy import LegacyApplication
-
-_default_composition = ContextVar("aka_legacy_default_composition", default=False)
-LEGACY_COMPOSITION_ERROR = (
-    "legacy application requires the default application composition; "
-    "custom application providers must own their child and recovery behavior"
-)
-
-
-@contextmanager
-def legacy_composition(compatible: bool):
-    token = _default_composition.set(compatible)
-    try:
-        yield
-    finally:
-        _default_composition.reset(token)
-
+from .application import LegacyApplication
 
 class LegacyEntrypoint:
     def __init__(self, repo_root: Path) -> None:
         self._repo_root = Path(repo_root).resolve()
 
     def __call__(self, argv: list[str] | None) -> int:
-        # Also reject custom providers that wrap this adapter. Context is scoped
-        # to an invocation and never inherited as process-global configuration.
-        if not _default_composition.get():
-            raise RuntimeError(LEGACY_COMPOSITION_ERROR)
         expected = self._repo_root / "orchestrator" / "optimize.py"
         # Direct script execution aliases __main__ under this name and has no
         # module spec. Reuse that live object instead of importing a second copy.

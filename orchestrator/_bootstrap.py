@@ -11,10 +11,10 @@ def run(argv: Optional[list[str]] = None) -> int:
     source = repo_root / "src"
     # A source checkout supports the historical command without an install step.
     # Exported application-only checkouts use the installed adapter distributions.
-    if (source / "aka" / "bootstrap" / "application.py").is_file():
+    if (source / "aka" / "bootstrap" / "host.py").is_file():
         if str(source) not in sys.path:
             sys.path.insert(0, str(source))
-    from aka.bootstrap.application import run_application
+    from aka.legacy.application.host import run_application
     from aka.contracts.application import ApplicationRequest
 
     return run_application(ApplicationRequest(repo_root, argv))

@@ -78,6 +78,7 @@ class ResolvedComposition:
     rows: tuple[Row, ...]
     layers: tuple[str, ...]
     variables: Mapping[str, str] = field(default_factory=dict)
+    configs_resolved: bool = False
 
     @property
     def enabled(self) -> tuple[Row, ...]:

@@ -103,6 +103,20 @@ def _load_restart(state_dir: Path) -> dict[str, Any]:
         or not 0 <= ssh_gpu <= 31
     ):
         raise RuntimeError("restart metadata has invalid ssh_gpu")
+    launch = value.get("launch_environment")
+    if value.get("schema_version") == 4 and launch is None:
+        raise RuntimeError("restart metadata lacks launch selection")
+    if launch is not None:
+        if (not isinstance(launch, dict) or set(launch) != {"AKA_LAUNCH_SELECTION", "AKA_LAUNCH_DIGEST"}
+                or any(not isinstance(item, str) or not item for item in launch.values())):
+            raise RuntimeError("restart metadata has invalid launch_environment")
+        import hashlib
+        try:
+            payload = Path(launch["AKA_LAUNCH_SELECTION"]).read_text()
+        except OSError as exc:
+            raise RuntimeError(f"restart launch selection is unavailable: {exc}") from exc
+        if hashlib.sha256(payload.encode()).hexdigest() != launch["AKA_LAUNCH_DIGEST"]:
+            raise RuntimeError("restart launch selection digest mismatch")
     return value
 
 
@@ -790,6 +804,11 @@ def _restart(metadata: dict[str, Any], state_dir: Path) -> int:
     started_at = time.time()
 
     environment = os.environ.copy()
+    # A fresh monitor must use the durable selection, never unrelated ambient
+    # launcher variables. Legacy schema 3 remains explicitly selection-free.
+    environment.pop("AKA_LAUNCH_SELECTION", None)
+    environment.pop("AKA_LAUNCH_DIGEST", None)
+    environment.update(metadata.get("launch_environment", {}))
     environment["ATREX_ENVIRONMENT_STATE_FILE"] = metadata[
         "environment_state_file"
     ]
