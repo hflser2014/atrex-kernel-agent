@@ -104,8 +104,9 @@ choose different policies.
 Bootstrap supplies continuation environment overrides in `Invocation`. Targets forward
 these to owned children and persist the selection before delayed restart. The legacy
 adapter currently uses a durable `launch-selection.json` referenced by schema 4 restart
-metadata. See the [current recovery constraints](application-plugin-migration.md#current-child-and-recovery-behavior), including the lack of automatic
-migration from an existing schema 3 recovery record.
+metadata. See the [current recovery constraints](application-plugin-migration.md#current-child-and-recovery-behavior): selection-free main schema 3
+records may use the built-in default legacy profile and be upgraded by the
+validated recovery owner; new launch records remain strict.
 
 ## Isolation and events
 

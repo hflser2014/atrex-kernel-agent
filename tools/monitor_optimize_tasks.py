@@ -105,6 +105,12 @@ def _load_restart(state_dir: Path) -> dict[str, Any]:
     ):
         raise RuntimeError("restart metadata has invalid ssh_gpu")
     launch = value.get("launch_environment")
+    selection_path = state_dir / "launch-selection.json"
+    if (value.get("schema_version") == 3 and "launch_environment" not in value
+            and (selection_path.exists() or selection_path.is_symlink())):
+        raise RuntimeError("schema 3 recovery has an unreferenced launch selection")
+    if "launch_environment" in value and launch is None:
+        raise RuntimeError("restart metadata has invalid launch_environment")
     if value.get("schema_version") == 4 and launch is None:
         raise RuntimeError("restart metadata lacks launch selection")
     if launch is not None:
@@ -806,7 +812,8 @@ def _restart(metadata: dict[str, Any], state_dir: Path) -> int:
 
     environment = os.environ.copy()
     # A fresh monitor must use the durable selection, never unrelated ambient
-    # launcher variables. Legacy schema 3 remains explicitly selection-free.
+    # launcher variables. Selection-free schema 3 resolves the built-in legacy
+    # default, which only the validated owner may persist as schema 4.
     environment.pop("AKA_LAUNCH_SELECTION", None)
     environment.pop("AKA_LAUNCH_DIGEST", None)
     for name, value in metadata.get("launch_environment", {}).items():

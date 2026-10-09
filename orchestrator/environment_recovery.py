@@ -198,12 +198,13 @@ def configure_recovery(
     os.environ.pop("ATREX_SANDBOX_PROFILE", None)
     os.environ[RECOVERY_OWNER_ENV] = "1" if owner else "0"
 
-    from aka.legacy.application.processes import recovery_environment
-    selection_environment = recovery_environment(directory)
+    from aka.legacy.application.processes import recovery_environment, schema3_recovery_allowed
+    selection_environment = recovery_environment(directory, persist=False)
     if selection_environment:
         stable_metadata["launch_environment"] = selection_environment
 
     restart_path = directory / "restart.json"
+    legacy_upgrade = False
     if restart_path.is_file():
         try:
             existing = json.loads(restart_path.read_text(encoding="utf-8"))
@@ -211,14 +212,31 @@ def configure_recovery(
             raise RuntimeError(f"cannot validate active recovery metadata: {exc}") from exc
         if not isinstance(existing, dict):
             raise RuntimeError("cannot validate active recovery metadata: expected an object")
+        if existing.get("schema_version") == 4 or "launch_environment" in existing:
+            from aka.bootstrap.continuation import read as read_launch_selection
+            recorded_environment = existing.get("launch_environment")
+            if not isinstance(recorded_environment, dict) or read_launch_selection(recorded_environment) is None:
+                raise RuntimeError("active recovery metadata lacks its recorded launch selection")
+        selection_path = directory / "launch-selection.json"
+        legacy_upgrade = (
+            existing.get("schema_version") == 3
+            and "launch_environment" not in existing
+            and not (selection_path.exists() or selection_path.is_symlink())
+            and bool(selection_environment)
+            and schema3_recovery_allowed()
+            and owner
+        )
         mismatches = [
             key
             for key, expected in stable_metadata.items()
             if existing.get(key) != expected
             # Pre-preflight metadata is upgraded by the same validated owner.
             and not (key == "runtime_health_command" and key not in existing)
+            and not (key == "launch_environment" and legacy_upgrade)
         ]
-        if existing.get("launch_environment", {}) != selection_environment:
+        if ((existing.get("launch_environment", {}) != selection_environment and not legacy_upgrade)
+                or (existing.get("schema_version") == 3 and "launch_environment" not in existing
+                    and (selection_path.exists() or selection_path.is_symlink()))):
             mismatches.append("launch_environment")
         if existing.get("environment_state_file") != str(inherited):
             mismatches.append("environment_state_file")
@@ -228,9 +246,12 @@ def configure_recovery(
                 + ", ".join(sorted(set(mismatches)))
             )
     if owner or not restart_path.is_file():
+        # Validate all existing metadata before creating or upgrading records.
+        recovery_environment(directory)
         _write_private_json(
             restart_path,
             {
+                **(existing if legacy_upgrade else {}),
                 "schema_version": 4 if selection_environment else 3,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "environment_state_file": str(inherited),

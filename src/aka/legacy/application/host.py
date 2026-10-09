@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import sys
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from aka.bootstrap.host import run_selection
 from aka.bootstrap.profile import resolve_profile
 from aka.contracts.startup import Invocation
 from aka.core.errors import CompositionError
-from .processes import invocation_environment
+from .processes import default_recovery_profile, invocation_environment, requires_default_recovery
 
 PROFILES_DIR = Path(__file__).with_name("profiles")
 COMPOSITION_VARS = ("repo_root", "workspace", "campaign_name", "operator", "platform", "arch",
@@ -35,6 +36,11 @@ def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR
     if optimizer is not None and Path(optimizer.__file__).resolve() != request.repo_root / "orchestrator/optimize.py":
         raise RuntimeError("a different AKA checkout is already loaded")
     payload = read(os.environ)
+    legacy_recovery = requires_default_recovery()
+    if legacy_recovery and (payload is not None or profile != "application"
+            or Path(profiles_dir).resolve() != PROFILES_DIR.resolve()
+            or patch_files or patches or variables or tokens):
+        raise CompositionError("recovery", "schema 3 recovery requires the built-in default legacy profile without overrides")
     if payload is not None:
         if profile != "application" or Path(profiles_dir) != PROFILES_DIR or patch_files or patches or variables:
             raise CompositionError("continuation", "cannot override a reconstructed launch selection")
@@ -70,5 +76,5 @@ def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR
                                 for path in bindings)
         selection = replace(selection, resources=(*selection.resources, *bound_resources, (script.parent, tuple(paths))),
                             bindings={**selection.bindings, "optimizer_script": str(script)})
-    with invocation_environment(selection.environment):
+    with (default_recovery_profile() if legacy_recovery else nullcontext()), invocation_environment(selection.environment):
         return run_selection(selection, Invocation(request.argv))

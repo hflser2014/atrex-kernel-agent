@@ -191,11 +191,16 @@ the recorded values instead of inheriting unrelated launch selection variables. 
 or changed selection, tokens, implementations or resources fail before setup. Core
 identity locks remain opt-in and separate from business locks and recovery state.
 
-An existing schema 3 recovery record without `launch_environment` is rejected when
-reused by a profile-hosted run, even by the recovery owner. Automatic schema 3-to-4
-migration is not currently implemented. Keep the original checkout and environment
-available to finish old recovery tasks. Same-version recovery does not imply support for
-upgrading old recovery state.
+An existing main schema 3 recovery record without `launch_environment` or any
+`launch-selection.json` uses the built-in default legacy profile. Custom profiles,
+patches, variables, tokens and supplied continuation selections are rejected.
+All original resolved-configuration and state-path checks still apply. Only the
+recovery owner may persist the selection and upgrade the record to schema 4,
+after those checks pass; a non-owner cannot perform this upgrade. Schema 4 and
+records with launch-selection evidence never fall back to the default when their
+selection is missing, corrupt or mismatched. Schema 3 retains main's environment
+recovery semantics; historical environment values that were never recorded are
+not reconstructed. Broader restart-format redesign is deferred.
 
 Existing tool-plugin locks also record absolute plugin paths and interpreter identity.
 Retain those inputs and do not rewrite locks to bypass identity checks.
