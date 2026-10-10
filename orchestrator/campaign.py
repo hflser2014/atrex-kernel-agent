@@ -39,7 +39,6 @@ from .constants import (
     FRAMEWORK_BASELINE_FILE,
     FRAMEWORK_BASELINE_TIMEOUT_S,
     FRAMEWORK_BASELINE_VERSION,
-    IMMUTABLE_BASELINE_PATHS,
     PROFILE_DRIVER,
     PROMPTS_DIR,
     REPO_ROOT,
@@ -2570,21 +2569,7 @@ class Campaign:
         mechanically repairable one — discarding its kernel over it would throw away hours of
         work for nothing. Acceptance is decided by the kernel itself.
         """
-        restored: list[str] = []
-        for path in IMMUTABLE_BASELINE_PATHS:
-            original = git_path_blob(self.workspace, baseline_commit, path)
-            if not original or original == git_worktree_blob(self.workspace, path):
-                continue
-            checkout = subprocess.run(
-                ["git", "checkout", baseline_commit, "--", path],
-                cwd=str(self.workspace),
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            if checkout.returncode == 0:
-                restored.append(path)
-        return restored
+        return self.candidate_workspace.restore_baseline(self.workspace, baseline_commit)
 
     def _framework_baseline_problem(
         self,
@@ -2616,13 +2601,7 @@ class Campaign:
         ):
             # A Gluon v1 would permanently disarm the orchestrator's mandatory Triton->Gluon latch.
             return "the framework baseline must be plain Triton; Gluon is a later orchestrator escalation"
-        mutated = [
-            path
-            for path in IMMUTABLE_BASELINE_PATHS
-            if git_path_blob(self.workspace, baseline_commit, path)
-            and git_path_blob(self.workspace, baseline_commit, path)
-            != git_worktree_blob(self.workspace, path)
-        ]
+        mutated = self.candidate_workspace.baseline_changes(self.workspace, baseline_commit)
         if mutated:
             return "the session modified immutable ground truth: " + ", ".join(mutated)
         return ""

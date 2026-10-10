@@ -22,6 +22,36 @@ def git_head(workspace: Path) -> str:
     return git_text(workspace, "rev-parse", "HEAD")
 
 
+def git_path_blob(workspace: Path, ref: str, path: str) -> str:
+    """Committed blob id of one path at one ref, or '' when it is absent there."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", f"{ref}:{path}"],
+            cwd=str(workspace),
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def git_worktree_blob(workspace: Path, path: str) -> str:
+    """Blob id of the on-disk file, or '' when it is missing."""
+    if not (workspace / path).is_file():
+        return ""
+    try:
+        result = subprocess.run(
+            ["git", "hash-object", "--", path],
+            cwd=str(workspace),
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
 def working_changes(workspace: Path) -> list[str]:
     # Porcelain status uses its first two columns for XY state.  Preserve the
     # leading space on an unstaged first entry; git_text().strip() would remove

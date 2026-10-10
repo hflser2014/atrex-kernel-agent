@@ -9,6 +9,14 @@ def _legacy(handle):
 
 
 class GitCandidateWorkspace(GitSnapshots):
+    def baseline_changes(self, workspace, baseline_commit):
+        from .baseline import baseline_changes
+        return baseline_changes(workspace, baseline_commit)
+
+    def restore_baseline(self, workspace, baseline_commit):
+        from .baseline import restore_baseline
+        return restore_baseline(workspace, baseline_commit)
+
     def install_files(self, workspace, files):
         from .content import install_files
         return install_files(workspace, files)
