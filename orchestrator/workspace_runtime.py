@@ -87,7 +87,7 @@ def _plan_generator_directive(agent_cli: str, version: int) -> str:
 def _install_atrex_bench_runtime(workspace: Path, atrex_bench_root: Path) -> None:
     from ._bootstrap import task_modules
     task_modules()
-    from aka.task.candidate_workspace.runtime import _install_atrex_bench_runtime as install
+    from aka.legacy.task.candidate_workspace.runtime import _install_atrex_bench_runtime as install
     install(workspace, atrex_bench_root)
 
 
@@ -97,11 +97,12 @@ def link_runtime(
     *,
     is_ppu: bool = False,
     plugin_registry: PluginRegistry | None = None,
+    provider=None,
 ) -> None:
     from ._bootstrap import task_modules
     task_modules()
-    from aka.bootstrap.workspace import candidate_workspace
-    with candidate_workspace() as provider:
+    from aka.legacy.application.workspace import candidate_workspace
+    with candidate_workspace(provider=provider) as provider:
         provider.install_runtime(workspace, atrex_bench_root,
                                  is_ppu=is_ppu,
                                  plugin_registry=plugin_registry or PluginRegistry(),

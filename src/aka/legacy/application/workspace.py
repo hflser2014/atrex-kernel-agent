@@ -2,7 +2,7 @@
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from aka.task.candidate_workspace.composition import compose_candidate
+from aka.legacy.task.candidate_workspace.composition import compose_candidate
 
 _candidate = ContextVar("aka_candidate_workspace", default=None)
 
@@ -17,8 +17,12 @@ def candidate_workspace(provider=None, **selection):
         return
     owner = None
     if provider is None:
-        owner = compose_candidate(**selection)
-        provider = owner.candidate
+        if selection:
+            owner = compose_candidate(**selection)
+            provider = owner.candidate
+        else:
+            from aka.legacy.task.candidate_workspace.provider import GitCandidateWorkspace
+            provider = GitCandidateWorkspace()
     token = _candidate.set(provider)
     try:
         yield provider

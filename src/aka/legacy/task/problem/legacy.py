@@ -15,9 +15,9 @@ from .layout import (
 class LegacyProblemProvider:
     optimization_mode: str = "leaderboard"
 
-    def load(self, directory: Path) -> LoadedProblem:
+    def load(self, directory: Path, *, optimization_mode=None) -> LoadedProblem:
         """Preserve the original operator resolver's validation order and errors."""
-        optimization_mode = self.optimization_mode
+        optimization_mode = optimization_mode or self.optimization_mode
         d = Path(directory).resolve()
         if not d.is_dir():
             raise SystemExit(f"--op-dir not found: {d}")
@@ -59,3 +59,11 @@ class LegacyProblemProvider:
             public_contract=d / AGENT_PROBLEM_FILENAME if generalized and provided_problem else None,
             public_contract_source="provided" if generalized and provided_problem else ("auto" if generalized else "none"),
         )
+
+    def inputs(self, operator_dir, workspace, optimization_mode, bench_root, generated_digest=""):
+        from .inputs import BenchInputs
+        return BenchInputs(operator_dir, workspace, optimization_mode, bench_root, generated_digest)
+
+    def sol_files(self, operator_dir):
+        from .inputs import sol_problem_files
+        return sol_problem_files(operator_dir)

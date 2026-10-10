@@ -1,6 +1,6 @@
 """Select or borrow initial sources; workspace operations remain independent."""
 from contextlib import contextmanager
-from aka.task.source.composition import compose_source
+from aka.legacy.task.source.composition import compose_source
 
 
 @contextmanager

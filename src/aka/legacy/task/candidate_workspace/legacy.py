@@ -6,8 +6,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from aka.task.git import (_git, git_text, git_head, working_changes, changed_paths, ignored_evidence_files, protected_violation, _manifest_deleted)
-from aka.task.io import atomic_write_json
+from aka.legacy.task.git import (_git, git_text, git_head, working_changes, changed_paths, ignored_evidence_files, protected_violation, _manifest_deleted)
+from aka.legacy.task.io import atomic_write_json
 from .policy import CANDIDATE_PATHS, TIMELINE_PROBE_MARKERS
 from .excludes import ensure_excluded
 

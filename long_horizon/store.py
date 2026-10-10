@@ -28,7 +28,7 @@ class CampaignStore:
     def ensure_excluded(workspace: Path, *, wiki_trace_only: bool = False) -> None:
         from orchestrator._bootstrap import task_modules
         task_modules()
-        from aka.task.candidate_workspace.excludes import ensure_excluded
+        from aka.legacy.task.candidate_workspace.excludes import ensure_excluded
         ensure_excluded(workspace, wiki_trace_only=wiki_trace_only)
 
     @property

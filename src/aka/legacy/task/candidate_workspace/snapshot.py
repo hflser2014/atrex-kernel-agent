@@ -1,6 +1,6 @@
 """Committed-file snapshot staging independent of evaluation or execution."""
 from pathlib import Path, PurePosixPath
-from aka.task.git import _git
+from aka.legacy.task.git import _git
 
 def _git_blob(workspace: Path, revision: str, relative: str) -> bytes | None:
     result = _git(workspace, "show", f"{revision}:{relative}", check=False, binary=True)

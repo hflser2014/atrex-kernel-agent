@@ -8,6 +8,6 @@ from aka.contracts.content import SourceContent, WorkspaceFile
 class KernelSourceProvider:
     kernel_demo: str
 
-    def prepare(self):
+    def prepare(self, request=None):
         return SourceContent((WorkspaceFile("kernel.py", source=Path(self.kernel_demo), copy="cp"),))
 

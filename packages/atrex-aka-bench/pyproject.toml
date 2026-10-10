@@ -15,7 +15,10 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["aka.task.problem", "aka.task.problem.*"]
+include = ["aka.legacy.task.problem", "aka.legacy.task.problem.*"]
 
 [tool.setuptools.package-data]
-"aka.task.problem" = ["profiles/*.json", "profiles/bundles/*.json"]
+"aka.legacy.task.problem" = ["profiles/*.json", "profiles/bundles/*.json"]
+
+[project.entry-points."aka.tokens"]
+problem = "aka.legacy.task.problem.plugin:PROBLEM"

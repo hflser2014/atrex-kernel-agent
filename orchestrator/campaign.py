@@ -214,6 +214,7 @@ class Campaign:
     sandbox_ssh_init: str = ""  # remote environment activation command
     sandbox_ssh_gpu: int | None = None  # assigned physical NVIDIA GPU index
     sandbox_health_command: str = ""  # remote GPU readiness probe
+    task_dependencies: dict | None = field(default=None, repr=False, compare=False)
     tokens_spent: int = field(default=0, init=False)
     _production_review_cache: dict[str, tuple[tuple[str, ...], dict[str, object]]] = (
         field(default_factory=dict, init=False, repr=False, compare=False)
@@ -226,6 +227,17 @@ class Campaign:
     )
 
     def __post_init__(self) -> None:
+        if self.task_dependencies is None:
+            from ._bootstrap import task_modules
+            task_modules()
+            from aka.legacy.task.problem.legacy import LegacyProblemProvider
+            from aka.legacy.task.source.legacy import LegacySourceProvider
+            from aka.legacy.task.candidate_workspace.provider import GitCandidateWorkspace
+            self.task_dependencies = dict(problem=LegacyProblemProvider(self.optimization_mode),
+                                          source=LegacySourceProvider(), workspace=GitCandidateWorkspace())
+        self.problem_provider = self.task_dependencies["problem"]
+        self.source_provider = self.task_dependencies["source"]
+        self.candidate_workspace = self.task_dependencies["workspace"]
         self.plugin_registry.check_lock(self.workspace)
         if sum(
             bool(value)
@@ -252,20 +264,15 @@ class Campaign:
         return self._problem_inputs().private_reference_dir
 
     def _problem_inputs(self):
-        from ._bootstrap import task_modules
-        task_modules()
-        from aka.task.problem.inputs import BenchInputs
-        return BenchInputs(Path(self.kernel_demo).resolve().parent, self.workspace,
-                           self.optimization_mode, self.atrex_bench_root,
-                           self._generated_agent_problem_digest)
+        return self.problem_provider.inputs(Path(self.kernel_demo).resolve().parent, self.workspace,
+                                            self.optimization_mode, self.atrex_bench_root,
+                                            self._generated_agent_problem_digest)
 
     def _ensure_agent_problem(self) -> None:
         """Schedule the original authoring session when public input preparation requires it."""
         inputs = self._problem_inputs()
         public = inputs.prepare_public()
-        from aka.bootstrap.workspace import candidate_workspace
-        with candidate_workspace() as workspace:
-            workspace.install_files(self.workspace, public.files)
+        self.candidate_workspace.install_files(self.workspace, public.files)
         if public.ready:
             self._generated_agent_problem_digest = inputs.generated_digest
             return
@@ -280,8 +287,7 @@ class Campaign:
             prefix="aka-generalize-problem-"
         ) as raw_staging:
             staging = Path(raw_staging)
-            with candidate_workspace() as workspace:
-                workspace.install_files(staging, inputs.authoring_assets())
+            self.candidate_workspace.install_files(staging, inputs.authoring_assets())
             for attempt in range(2):
                 repair_context = (
                     "The current agent_problem.json failed orchestrator validation. Replace it "
@@ -314,8 +320,7 @@ class Campaign:
                         f"two attempts: {validation_error}"
                         + (f"; agent output: {detail}" if detail else "")
                     ) from exc
-                with candidate_workspace() as workspace:
-                    workspace.install_files(self.workspace, (inputs.generated_file(generated),))
+                self.candidate_workspace.install_files(self.workspace, (inputs.generated_file(generated),))
                 inputs.record_generated()
                 self._generated_agent_problem_digest = inputs.generated_digest
                 print(
@@ -692,6 +697,7 @@ class Campaign:
             self.workspace,
             native_root,
             plugin_registry=self.plugin_registry,
+            provider=self.candidate_workspace,
             is_ppu=hardware_vendor(self.platform, self.arch) == "ppu",
         )
         install_workspace_policy(
@@ -815,14 +821,11 @@ class Campaign:
         # so cwd must be the work_dir (or the process cwd when --workspace is absent).
         from ._bootstrap import task_modules
         task_modules()
-        from aka.bootstrap.source import source_provider
-        from aka.bootstrap.workspace import candidate_workspace
-        with source_provider(kernel_demo=self.kernel_demo) as source:
-            content = source.prepare()
-        with candidate_workspace() as workspace:
-            code = workspace.initialize_kernel(WORKSPACE_INIT.parent, str(WORKSPACE_INIT),
-                [self.campaign_name, self.kernel_demo], content=content,
-                working_directory=self.workspace.parent)
+        from aka.contracts.workspace import SourceRequest
+        content = self.source_provider.prepare(SourceRequest(kernel_demo=self.kernel_demo))
+        code = self.candidate_workspace.initialize_kernel(WORKSPACE_INIT.parent, str(WORKSPACE_INIT),
+            [self.campaign_name, self.kernel_demo], content=content,
+            working_directory=self.workspace.parent)
         if code:
             raise subprocess.CalledProcessError(code,
                 ["bash", str(WORKSPACE_INIT), self.campaign_name, self.kernel_demo])
@@ -831,8 +834,7 @@ class Campaign:
         # sandbox boundary. A missing public contract is authored before the baseline session.
         inputs = self._problem_inputs()
         generalized = inputs.private_reference_dir is not None
-        with candidate_workspace() as workspace:
-            workspace.install_files(self.workspace, inputs.operator_files())
+        self.candidate_workspace.install_files(self.workspace, inputs.operator_files())
         self._ensure_agent_problem()
         if generalized:
             # Seed the immutable public contract into the eventual V0 commit even when the
@@ -1285,7 +1287,10 @@ class Campaign:
             # correctness/performance is run below in the remote sandbox.
             "--no-bench",
         ]
-        subprocess.run(cmd, check=True)
+        from reference import sol_seed
+        code = sol_seed.main(cmd[2:], dependencies=self.task_dependencies)
+        if code:
+            raise subprocess.CalledProcessError(code, cmd)
         self._link_runtime()
         source_commit = v0_baseline_commit(self.workspace)
         if not source_commit:
@@ -2957,6 +2962,7 @@ class Campaign:
         CampaignStore.ensure_excluded(self.workspace)
 
         verifier = GatewayABBAValidator(
+            workspace_provider=self.candidate_workspace,
             hardware=self.sandbox_hardware,
             profile=self.sandbox_profile,
             url=self.sandbox_url,

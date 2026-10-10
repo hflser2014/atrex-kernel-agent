@@ -34,6 +34,10 @@ def application_variables(repo_root, values=None):
 
 def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR,
                     patch_files=(), patches=(), variables=None, tokens=()):
+    from aka.legacy.task.problem.plugin import PROBLEM
+    from aka.legacy.task.source.plugin import SOURCE
+    from aka.legacy.task.candidate_workspace.plugin import CANDIDATE
+    task_tokens = (PROBLEM, SOURCE, CANDIDATE)
     pending = pending_recovery_directory()
     if pending is not None:
         if (profile != "application" or Path(profiles_dir).resolve() != PROFILES_DIR.resolve()
@@ -64,7 +68,7 @@ def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR
     if payload is not None:
         if profile != "application" or Path(profiles_dir) != PROFILES_DIR or patch_files or patches or variables:
             raise CompositionError("continuation", "cannot override a reconstructed launch selection")
-        selection = restore(payload, tokens=tokens)
+        selection = restore(payload, tokens=(*task_tokens, *tokens))
         process_launch = sys.modules.get("orchestrator.process_launch")
         script = (process_launch.optimizer_entrypoint() if process_launch is not None
                   else request.repo_root / "orchestrator/optimize.py")
@@ -77,7 +81,7 @@ def run_application(request, *, profile="application", profiles_dir=PROFILES_DIR
             raise RuntimeError("a different AKA checkout is requested by continuation")
     else:
         selection = resolve_profile(Path(profiles_dir) / f"{profile}.json",
-            patch_files=patch_files, patches=patches, tokens=tokens,
+            patch_files=patch_files, patches=patches, tokens=(*task_tokens, *tokens),
             variables=application_variables(request.repo_root, variables))
         # A selected internal launcher is an explicit process dependency. Avoid
         # importing the optimizer during assembly or modifying its module identity.

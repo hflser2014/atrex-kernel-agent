@@ -14,8 +14,20 @@ class SourceSnapshot:
     sha256: str
 
 
+@dataclass(frozen=True)
+class SourceRequest:
+    kind: str = "kernel"
+    kernel_demo: str = ""
+    operator_dir: str = ""
+    name: str = ""
+    framework: str = ""
+    platform: str = ""
+    gpu_wiki: str = ""
+    definition: dict | None = None
+
+
 class SourceProvider(Protocol):
-    def prepare(self) -> SourceContent:
+    def prepare(self, request: SourceRequest | None = None) -> SourceContent:
         """Describe initial source files without writing an agent workspace."""
         ...
 

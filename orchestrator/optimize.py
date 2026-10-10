@@ -384,13 +384,13 @@ def dispatch_framework_campaigns(
     return 0
 
 
-def _resolve_op(op_dir: str, optimization_mode: str = "leaderboard") -> dict:
+def _resolve_op(op_dir: str, optimization_mode: str = "leaderboard", *, provider=None) -> dict:
     """Resolve existing operator options through the selected Problem module."""
     from orchestrator._bootstrap import resolve_problem
-    return resolve_problem(op_dir, optimization_mode)
+    return resolve_problem(op_dir, optimization_mode, provider=provider)
 
 
-def _run_main(argv: Optional[list[str]] = None) -> int:
+def _run_main(argv: Optional[list[str]] = None, *, dependencies=None) -> int:
     ap = argparse.ArgumentParser(
         description="Long-horizon episode orchestrator for atrex-kernel-agent."
     )
@@ -791,7 +791,7 @@ def _run_main(argv: Optional[list[str]] = None) -> int:
         args.workspace = str(Path(args.workspace).expanduser().resolve())
         Path(args.workspace).mkdir(parents=True, exist_ok=True)
 
-    op = _resolve_op(args.op_dir, args.optimization_mode)
+    op = _resolve_op(args.op_dir, args.optimization_mode, provider=(dependencies or {}).get("problem"))
     if args.sandbox_ssh:
         workspace_base = Path(args.workspace) if args.workspace else Path.cwd()
         configure_recovery(
@@ -878,6 +878,7 @@ def _run_main(argv: Optional[list[str]] = None) -> int:
     )
 
     campaign = Campaign(
+        task_dependencies=dependencies,
         name=op["name"],
         kernel_demo=op["reference"],
         platform=args.platform,
@@ -976,9 +977,9 @@ def _run_main(argv: Optional[list[str]] = None) -> int:
             signal.signal(handled_signal, previous_handler)
 
 
-def _run_application(argv: Optional[list[str]] = None) -> int:
+def _run_application(argv: Optional[list[str]] = None, *, dependencies=None) -> int:
     try:
-        result = _run_main(argv)
+        result = _run_main(argv) if dependencies is None else _run_main(argv, dependencies=dependencies)
     except EnvironmentUnavailable:
         result = ENVIRONMENT_TEMPFAIL
     if result == ENVIRONMENT_TEMPFAIL or environment_is_blocked():

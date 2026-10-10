@@ -382,12 +382,12 @@ def score_verification_payload(
     )
 
 
-from aka.task.candidate_workspace.snapshot import _git_blob
+from aka.legacy.task.candidate_workspace.snapshot import _git_blob
 
 
-def _snapshot_revision(workspace, revision, changed_paths, destination, label):
-    from aka.bootstrap.workspace import candidate_workspace
-    with candidate_workspace() as provider:
+def _snapshot_revision(workspace, revision, changed_paths, destination, label, *, provider=None):
+    from aka.legacy.application.workspace import candidate_workspace
+    with candidate_workspace(provider=provider) as provider:
         return provider.write_revision(workspace, revision, changed_paths, destination, label)
 
 
@@ -408,7 +408,9 @@ class GatewayABBAValidator:
         queue_wait_grace: int = 14_400,
         private_reference_dir: Path | None = None,
         shape_batch_size: int = DEFAULT_SHAPE_BATCH_SIZE,
+        workspace_provider=None,
     ):
+        self.workspace_provider = workspace_provider
         self.hardware = hardware
         self.profile = profile
         self.url = url
@@ -454,10 +456,10 @@ class GatewayABBAValidator:
         shutil.copy2(Path(__file__).with_name("remote_abba.py"), driver)
         manifests = {
             "incumbent": _snapshot_revision(
-                workspace, base_commit, changed_paths, directory, "incumbent"
+                workspace, base_commit, changed_paths, directory, "incumbent", provider=self.workspace_provider
             ),
             "candidate": _snapshot_revision(
-                workspace, candidate_commit, changed_paths, directory, "candidate"
+                workspace, candidate_commit, changed_paths, directory, "candidate", provider=self.workspace_provider
             ),
         }
         batch_specs = []

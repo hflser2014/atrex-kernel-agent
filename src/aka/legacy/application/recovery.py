@@ -4,9 +4,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aka.bootstrap.continuation import DIGEST_ENV, SELECTION_ENV, digest, restore
+from aka.bootstrap.continuation import DIGEST_ENV, SELECTION_ENV, digest, restore as restore_selection
 
 MIGRATION_FILE = "launch-migration.json"
+
+
+def restore(payload):
+    from aka.legacy.task.problem.plugin import PROBLEM
+    from aka.legacy.task.source.plugin import SOURCE
+    from aka.legacy.task.candidate_workspace.plugin import CANDIDATE
+    return restore_selection(payload, tokens=(PROBLEM, SOURCE, CANDIDATE))
 
 
 def has_selection(path: Path) -> bool:

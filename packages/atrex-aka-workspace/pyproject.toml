@@ -15,8 +15,12 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["aka.task", "aka.task.source", "aka.task.source.*", "aka.task.candidate_workspace", "aka.task.candidate_workspace.*"]
+include = ["aka.legacy.task", "aka.legacy.task.source", "aka.legacy.task.source.*", "aka.legacy.task.candidate_workspace", "aka.legacy.task.candidate_workspace.*"]
 
 [tool.setuptools.package-data]
-"aka.task.source" = ["profiles/*.json", "profiles/bundles/*.json"]
-"aka.task.candidate_workspace" = ["profiles/*.json", "profiles/bundles/*.json", "*.sh"]
+"aka.legacy.task.source" = ["profiles/*.json", "profiles/bundles/*.json"]
+"aka.legacy.task.candidate_workspace" = ["profiles/*.json", "profiles/bundles/*.json", "*.sh"]
+
+[project.entry-points."aka.tokens"]
+source = "aka.legacy.task.source.plugin:SOURCE"
+candidate = "aka.legacy.task.candidate_workspace.plugin:CANDIDATE"

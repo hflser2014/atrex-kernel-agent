@@ -55,11 +55,11 @@ if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 from orchestrator._bootstrap import task_modules
 task_modules()
-from aka.task.source.sol.render import _build_kernel, _render_kernel, _solution_json, _readme
-from aka.bootstrap.source import source_provider
-from aka.bootstrap.workspace import candidate_workspace
-from aka.task.candidate_workspace.initial import GITIGNORE
-from aka.task.problem.inputs import sol_problem_files
+from aka.legacy.task.source.sol.render import _build_kernel, _render_kernel, _solution_json, _readme
+from aka.legacy.application.source import source_provider
+from aka.legacy.application.workspace import candidate_workspace
+from aka.legacy.task.candidate_workspace.initial import GITIGNORE
+from aka.legacy.task.problem.inputs import sol_problem_files
 
 
 # Profiling is driven by the external `profile_driver.py` seeded next to kernel.py.
@@ -67,7 +67,7 @@ from aka.task.problem.inputs import sol_problem_files
 # in-kernel `__main__` block is silently lost the first time a session rewrites run().
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, dependencies=None) -> int:
     ap = argparse.ArgumentParser(description="Seed a kernel-opt workspace from a SOL-ExecBench op dir.")
     ap.add_argument("--op-dir", required=True, help="SOL op dir (definition.json + reference.py + workload.jsonl).")
     ap.add_argument("--name", required=True, help="Workspace name -> kernel_opt_<name>/.")
@@ -129,11 +129,19 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit("existing V0 is not the SOL reference wrapper")
             print(f"[sol_seed] reusing V0 source {source_commit}: {ws}")
             return 0
-    problem_files = sol_problem_files(op)
-    with source_provider("sol", operator_dir=str(op), name=args.name, framework=args.framework,
+    problem_files = (dependencies["problem"].sol_files(op) if dependencies is not None
+                     else sol_problem_files(op))
+    from contextlib import nullcontext
+    from aka.contracts.workspace import SourceRequest
+    request = SourceRequest("sol", operator_dir=str(op), name=args.name, framework=args.framework,
+                            platform=args.platform, gpu_wiki=args.gpu_wiki, definition=defn)
+    if dependencies is not None:
+        content = dependencies["source"].prepare(request)
+    else:
+        with source_provider("sol", operator_dir=str(op), name=args.name, framework=args.framework,
                          platform=args.platform, gpu_wiki=args.gpu_wiki, definition=defn) as source:
-        content = source.prepare()
-    with candidate_workspace() as workspace:
+            content = source.prepare()
+    with (nullcontext(dependencies["workspace"]) if dependencies is not None else candidate_workspace()) as workspace:
         workspace.prepare_sol(ws, content, problem_files=problem_files, reference_dir=SCRIPT_DIR)
 
     # 5) V0 baseline metrics (real evaluator)
@@ -147,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             print("[sol_seed] WARNING: V0 baseline did not pass all workloads — check solution.json / reference.",
                   file=sys.stderr)
 
-    with candidate_workspace() as workspace:
+    with (nullcontext(dependencies["workspace"]) if dependencies is not None else candidate_workspace()) as workspace:
         workspace.commit_sol(ws)
 
     print(f"[sol_seed] workspace ready: {ws}")

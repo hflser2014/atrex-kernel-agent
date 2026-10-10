@@ -5,7 +5,7 @@ CANDIDATE = ServiceKey("candidate", "CandidateWorkspace", module="aka.contracts.
 name = "candidate-workspace"
 provide = ("candidate",)
 identity_files = ("plugin.py", "provider.py", "legacy.py", "snapshot.py", "policy.py", "excludes.py", "runtime.py", "initial.py", "content.py", "init.sh")
-identity_packages = ("aka.task.git", "aka.task.io", "aka.contracts.content")
+identity_packages = ("aka.legacy.task.git", "aka.legacy.task.io", "aka.contracts.content")
 Config = {"type": "object", "properties": {}, "additionalProperties": False}
 
 

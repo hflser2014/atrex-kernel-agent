@@ -1,10 +1,11 @@
 """Adapt typed problem facts to the original Optimization Application options."""
 from pathlib import Path
+from functools import partial
 
 from aka.contracts.problem import LoadedProblem
 from aka.contracts.problem_provider import ProblemProvider
 from aka.core.effects import call_sync
-from aka.task.problem.composition import compose_problem
+from aka.legacy.task.problem.composition import compose_problem
 
 
 def resolve_operator_directory(directory: str, optimization_mode: str = "leaderboard",
@@ -12,7 +13,7 @@ def resolve_operator_directory(directory: str, optimization_mode: str = "leaderb
     if provider is not None:
         if selection:
             raise ValueError("an injected problem provider cannot also select a plugin")
-        loaded = call_sync(provider.load, Path(directory))
+        loaded = call_sync(partial(provider.load, optimization_mode=optimization_mode), Path(directory))
     else:
         with compose_problem(optimization_mode=optimization_mode, **selection) as composition:
             loaded = call_sync(composition.provider.load, Path(directory))

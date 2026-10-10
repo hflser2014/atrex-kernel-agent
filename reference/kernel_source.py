@@ -9,8 +9,8 @@ if str(root) not in sys.path:
 from orchestrator._bootstrap import task_modules
 
 task_modules()
-from aka.bootstrap.source import source_provider
-from aka.bootstrap.workspace import candidate_workspace
+from aka.legacy.application.source import source_provider
+from aka.legacy.application.workspace import candidate_workspace
 
 
 def main(argv=None):

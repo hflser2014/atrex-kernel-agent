@@ -14,7 +14,7 @@ class SolSourceProvider:
     gpu_wiki: str = ""
     definition: dict | None = None
 
-    def prepare(self):
+    def prepare(self, request=None):
         op = Path(self.operator_dir)
         definition = self.definition if self.definition is not None else json.loads((op / "definition.json").read_text(encoding="utf-8"))
         files = (

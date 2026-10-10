@@ -1,29 +1,30 @@
 """Compatibility adapters to task-owned Git and candidate workspace modules."""
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from orchestrator._bootstrap import task_modules
 
 task_modules()
-from aka.task.git import (_git, git_text, git_head, working_changes, changed_paths, ignored_evidence_files, protected_violation, _manifest_deleted)
-from aka.task.candidate_workspace.policy import (PROTECTED_PATHS, PROTECTED_PREFIXES, EPISODE_EVIDENCE_PREFIXES, CANDIDATE_PATHS, TIMELINE_PROBE_MARKERS)
+from aka.legacy.task.git import (_git, git_text, git_head, working_changes, changed_paths, ignored_evidence_files, protected_violation, _manifest_deleted)
+from aka.legacy.task.candidate_workspace.policy import (PROTECTED_PATHS, PROTECTED_PREFIXES, EPISODE_EVIDENCE_PREFIXES, CANDIDATE_PATHS, TIMELINE_PROBE_MARKERS)
 from aka.contracts.workspace import CandidateHandle
-from aka.bootstrap.workspace import candidate_workspace
+from aka.legacy.application.workspace import candidate_workspace
 from .protocol import atomic_write_json
 import subprocess
 
 
 @dataclass(frozen=True)
 class EpisodeWorktree(CandidateHandle):
+    provider: Any = field(default=None, repr=False, compare=False, kw_only=True)
     @classmethod
-    def plan(cls, incumbent_workspace, episode, base_commit, root=None):
-        with candidate_workspace() as provider:
+    def plan(cls, incumbent_workspace, episode, base_commit, root=None, *, provider=None):
+        with candidate_workspace(provider=provider) as provider:
             handle = provider.plan(incumbent_workspace, episode, base_commit, root)
-        return cls(handle.episode, handle.base_commit, handle.branch, handle.path)
+        return cls(handle.episode, handle.base_commit, handle.branch, handle.path, provider=provider)
 
     def materialize(self, incumbent_workspace):
-        with candidate_workspace() as provider:
+        with candidate_workspace(provider=self.provider) as provider:
             return provider.materialize(self, incumbent_workspace)
 
     @classmethod
@@ -33,20 +34,20 @@ class EpisodeWorktree(CandidateHandle):
         return planned
 
     def validate_candidate(self, candidate_commit):
-        with candidate_workspace() as provider:
+        with candidate_workspace(provider=self.provider) as provider:
             return provider.validate_candidate(self, candidate_commit)
 
     def archive(self, destination, candidate_commit="HEAD"):
-        with candidate_workspace() as provider:
+        with candidate_workspace(provider=self.provider) as provider:
             return provider.archive(self, destination, candidate_commit)
 
     def remove(self, incumbent_workspace):
-        with candidate_workspace() as provider:
+        with candidate_workspace(provider=self.provider) as provider:
             return provider.remove(self, incumbent_workspace)
 
 
-def promote_candidate(incumbent_workspace, **options):
-    with candidate_workspace() as provider:
+def promote_candidate(incumbent_workspace, *, provider=None, **options):
+    with candidate_workspace(provider=provider) as provider:
         return provider.promote(incumbent_workspace, **options)
 
 

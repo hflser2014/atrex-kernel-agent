@@ -8,16 +8,16 @@ from typing import Optional
 
 def task_modules():
     source = Path(__file__).resolve().parent.parent / "src"
-    if (source / "aka" / "task" / "problem").is_dir() and str(source) not in sys.path:
+    if (source / "aka" / "legacy" / "task" / "problem").is_dir() and str(source) not in sys.path:
         sys.path.insert(0, str(source))
-    from aka.task import problem
+    from aka.legacy.task import problem
     return problem
 
 
-def resolve_problem(directory: str, optimization_mode: str = "leaderboard") -> dict:
+def resolve_problem(directory: str, optimization_mode: str = "leaderboard", *, provider=None) -> dict:
     task_modules()
-    from aka.bootstrap.task import resolve_operator_directory
-    return resolve_operator_directory(directory, optimization_mode)
+    from aka.legacy.application.task import resolve_operator_directory
+    return resolve_operator_directory(directory, optimization_mode, provider=provider)
 
 
 def run(argv: Optional[list[str]] = None) -> int:
