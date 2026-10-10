@@ -15,12 +15,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNERS = {
-    'atrex-aka-core': ('aka/__init__.py', 'aka/__main__.py', 'aka/cli.py', 'aka/core'),
-    'atrex-aka-contracts': ('aka/contracts',),
-    'atrex-aka-optimization': ('aka/legacy/__init__.py', 'aka/legacy/application'),
-    'atrex-aka-bootstrap': ('aka/bootstrap',),
-    'atrex-aka-bench': ('aka/legacy/task/problem',),
-    'atrex-aka-workspace': ('aka/legacy/task/__init__.py', 'aka/legacy/task/git.py', 'aka/legacy/task/io.py', 'aka/legacy/task/source', 'aka/legacy/task/candidate_workspace'),
+    'atrex-aka-framework': ('aka/__init__.py', 'aka/__main__.py', 'aka/cli.py', 'aka/core', 'aka/contracts', 'aka/bootstrap'),
+    'atrex-aka-legacy': ('aka/legacy',),
 }
 
 
